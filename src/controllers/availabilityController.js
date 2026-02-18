@@ -1,4 +1,5 @@
 const AvailabilitySlot = require('../models/AvailabilitySlot');
+const { get } = require('../routes/availabilityRoutes');
 
 const createSlot = async (req, res, next) => {
   try {
@@ -112,6 +113,71 @@ const deleteSlot = async (req, res, next) => {
   }
 };
 
+const getAvailableSlots = async (req, res, next) => {
+  try {
+    const { tutorId, date } = req.params;
+
+    const range = await AvailabilitySlot.getRange(tutorId);
+
+    if (!range || date < range.start_date || date > range.end_date) {
+      return res.status(200).json({
+        success: true,
+        data: { slots: [] }
+      });
+    }
+
+    const excludedDates = await AvailabilitySlot.getExcludedDates(tutorId);
+    const isExcluded = excludedDates.some(d =>
+      d.date.toISOString().split('T')[0] === date
+    );
+
+    if (isExcluded) {
+      return res.status(200).json({
+        success: true,
+        data: { slots: [] }
+      });
+    }
+
+    const dayName = new Date(date).toLocaleString('en-US', { weekday: 'long' });
+
+    const weeklySlots = await AvailabilitySlot.findByTutorId(tutorId);
+    const dayBlocks = weeklySlots.filter(
+      slot => slot.day_of_week === dayName
+    );
+
+    let generatedSlots = [];
+
+    dayBlocks.forEach(block => {
+      let current = new Date(`1970-01-01T${block.start_time}`);
+      const endTime = new Date(`1970-01-01T${block.end_time}`);
+      const duration = block.slot_duration;
+
+      while (current < endTime) {
+        generatedSlots.push(current.toTimeString().slice(0,5));
+        current = new Date(current.getTime() + duration * 60000);
+      }
+    });
+
+    const booked = await Session.findBookedSlots(tutorId, date);
+    const bookedTimes = booked.map(b =>
+      b.scheduled_time.slice(0,5)
+    );
+
+    const available = generatedSlots.filter(
+      slot => !bookedTimes.includes(slot)
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { slots: available }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 const saveAvailability = async (req, res, next) => {
   try {
     if (req.user.role !== 'tutor') {
@@ -155,10 +221,91 @@ const saveAvailability = async (req, res, next) => {
   }
 };
 
+const getAvailableSlotsByDate = async (req, res, next) => {
+  try {
+    const { tutorId, date } = req.params;
+
+    // 1️⃣ Check month range
+    const range = await AvailabilitySlot.getRange(tutorId);
+    if (!range || date < range.start_date || date > range.end_date) {
+      return res.status(400).json({
+        success: false,
+        message: "Date is outside tutor availability range"
+      });
+    }
+
+    // 2️⃣ Check excluded date
+    const excludedDates = await AvailabilitySlot.getExcludedDates(tutorId);
+    const isExcluded = excludedDates.some(d => 
+      new Date(d.date).toISOString().split('T')[0] === date
+    );
+
+    if (isExcluded) {
+      return res.status(400).json({
+        success: false,
+        message: "Tutor is unavailable on this date"
+      });
+    }
+
+    // 3️⃣ Get day of week
+    const dayOfWeek = new Date(date).toLocaleString('en-US', { weekday: 'long' });
+
+    const weeklyBlocks = await AvailabilitySlot.findByTutorId(tutorId);
+    const dayBlocks = weeklyBlocks.filter(b => b.day_of_week === dayOfWeek);
+
+    // 4️⃣ Generate 1-hour slots
+    let generatedSlots = [];
+
+    dayBlocks.forEach(block => {
+      let start = block.start_time;
+      let end = block.end_time;
+
+      const duration = block.slot_duration;
+
+      let current = start;
+
+      while (current < end) {
+        const [h, m] = current.split(':').map(Number);
+        const nextTime = new Date(0, 0, 0, h, m + duration);
+        const nextStr = nextTime.toTimeString().slice(0, 5);
+
+        if (nextStr <= end) {
+          generatedSlots.push(current);
+        }
+
+        current = nextStr;
+      }
+    });
+
+    // 5️⃣ Remove already booked sessions
+    const bookedSessions = await Session.findByTutorId(tutorId);
+    const bookedTimes = bookedSessions
+      .filter(s => s.scheduled_date === date)
+      .map(s => s.scheduled_time.slice(0, 5));
+
+    const availableSlots = generatedSlots.filter(
+      slot => !bookedTimes.includes(slot)
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        date,
+        slots: availableSlots
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSlot,
   getMySlots,
   getTutorSlots,
+  getAvailableSlots,
+  getAvailableSlotsByDate,
   updateSlot,
   deleteSlot,
   saveAvailability

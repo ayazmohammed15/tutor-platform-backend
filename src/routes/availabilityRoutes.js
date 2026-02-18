@@ -5,6 +5,8 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { availabilitySlotValidator } = require('../utils/validators');
 const validate = require('../middleware/validate');
 
+router.get('/tutor/:tutorId/date/:date',authenticate,availabilityController.getAvailableSlots);
+router.get('/tutor/:tutorId/date/:date',authenticate,availabilityController.getAvailableSlotsByDate);
 router.post('/save', authenticate, authorize('tutor'), availabilityController.saveAvailability);
 router.post('/', authenticate, authorize('tutor'), availabilitySlotValidator, validate, availabilityController.createSlot);
 router.get('/my-slots', authenticate, authorize('tutor'), availabilityController.getMySlots);

@@ -1,9 +1,13 @@
+const { pool } = require('../config/database');
 const SessionRequest = require('../models/SessionRequest');
+const AvailabilitySlot = require('../models/AvailabilitySlot');
 const Session = require('../models/Session');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
 
 const createSessionRequest = async (req, res, next) => {
+  const connection = await pool.getConnection();
+
   try {
     if (req.user.role !== 'student') {
       return res.status(403).json({
@@ -12,7 +16,25 @@ const createSessionRequest = async (req, res, next) => {
       });
     }
 
-    const { tutor_id, subject_id, requested_date, requested_time, notes } = req.body;
+    let { tutor_id, subject_id, requested_date, requested_time, notes } = req.body;
+
+    // 🔥 Normalize date (avoid timezone shift)
+    const requestedDateOnly = requested_date.split('T')[0];
+
+    const reqDate = new Date(requestedDateOnly);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (reqDate < today) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot book past dates'
+      });
+    }
+
+    /* ==============================
+       1️⃣ Validate Tutor Exists
+    ============================== */
 
     const tutor = await User.findById(tutor_id);
     if (!tutor || tutor.role !== 'tutor') {
@@ -22,17 +44,134 @@ const createSessionRequest = async (req, res, next) => {
       });
     }
 
+    /* ==============================
+       2️⃣ Check Availability Range
+    ============================== */
+
+    const range = await AvailabilitySlot.getRange(tutor_id);
+
+    if (!range) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tutor has no availability set'
+      });
+    }
+
+    const startDate = new Date(range.start_date);
+    const endDate = new Date(range.end_date);
+
+    if (reqDate < startDate || reqDate > endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected date is outside tutor availability range'
+      });
+    }
+
+    /* ==============================
+       3️⃣ Check Excluded Dates (Timezone Safe)
+    ============================== */
+
+    const [excluded] = await connection.query(
+      `SELECT id FROM tutor_unavailable_dates
+   WHERE tutor_id = ? AND date = ?`,
+      [tutor_id, requestedDateOnly]
+    );
+
+    if (excluded.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tutor is unavailable on this date'
+      });
+    }
+
+
+    /* ==============================
+       4️⃣ Check Weekly Schedule
+    ============================== */
+
+    const dayOfWeek = reqDate.toLocaleString('en-US', { weekday: 'long' });
+
+    const weeklyBlocks = await AvailabilitySlot.findByTutorId(tutor_id);
+    const dayBlocks = weeklyBlocks.filter(
+      block => block.day_of_week === dayOfWeek
+    );
+
+    if (dayBlocks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tutor does not work on this day'
+      });
+    }
+
+    /* ==============================
+       5️⃣ Generate Valid Slots
+    ============================== */
+
+    let validSlots = [];
+
+    dayBlocks.forEach(block => {
+      let current = block.start_time;
+      const end = block.end_time;
+      const duration = block.slot_duration;
+
+      while (current < end) {
+        const [h, m] = current.split(':').map(Number);
+        const nextTime = new Date(0, 0, 0, h, m + duration);
+        const nextStr = nextTime.toTimeString().slice(0, 5);
+
+        if (nextStr <= end) {
+          validSlots.push(current);
+        }
+
+        current = nextStr;
+      }
+    });
+
+    if (!validSlots.includes(requested_time)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid time slot selected'
+      });
+    }
+
+    /* ==============================
+       6️⃣ Prevent Double Booking (Transaction + Lock)
+    ============================== */
+
+    await connection.beginTransaction();
+
+    const [existingSession] = await connection.query(
+      `SELECT id FROM sessions
+       WHERE tutor_id = ? AND scheduled_date = ? AND scheduled_time = ?
+       FOR UPDATE`,
+      [tutor_id, requestedDateOnly, requested_time]
+    );
+
+    if (existingSession.length > 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'This time slot is already booked'
+      });
+    }
+
+    /* ==============================
+       7️⃣ Create Session Request
+    ============================== */
+
     const requestId = await SessionRequest.create({
       student_id: req.user.id,
       tutor_id,
       subject_id,
-      requested_date,
+      requested_date: requestedDateOnly,
       requested_time,
       notes
     });
 
-    const sessionRequest = await SessionRequest.findById(requestId);
+    await connection.commit();
+    connection.release();
 
+    const sessionRequest = await SessionRequest.findById(requestId);
     await emailService.sendSessionRequestEmail(tutor, sessionRequest);
 
     res.status(201).json({
@@ -40,10 +179,14 @@ const createSessionRequest = async (req, res, next) => {
       message: 'Session request sent successfully',
       data: { sessionRequest }
     });
+
   } catch (error) {
+    await connection.rollback();
+    connection.release();
     next(error);
   }
 };
+
 
 const getMyRequests = async (req, res, next) => {
   try {
