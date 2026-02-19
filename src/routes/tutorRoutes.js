@@ -15,5 +15,6 @@ router.put('/:tutorId/reject', authenticate, authorize('admin'), tutorController
 
 router.get('/search', authenticate, tutorController.searchTutors);
 router.get('/:tutorId', authenticate, tutorController.getTutorDetails);
+console.log(tutorController);
 
 module.exports = router;

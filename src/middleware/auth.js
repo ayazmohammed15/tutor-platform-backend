@@ -23,9 +23,11 @@ const authenticate = async (req, res, next) => {
     }
 
     const [users] = await pool.query(
-      'SELECT id, email, full_name, role, is_active FROM users WHERE id = ?',
-      [decoded.userId]
-    );
+  `SELECT id, first_name, last_name, email, role, is_active 
+   FROM users WHERE id = ?`,
+  [decoded.userId]
+);
+
 
     if (users.length === 0) {
       return res.status(401).json({

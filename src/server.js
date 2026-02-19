@@ -11,7 +11,9 @@ const authRoutes = require('./routes/authRoutes');
 const tutorRoutes = require('./routes/tutorRoutes');
 const availabilityRoutes = require('./routes/availabilityRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
+// const paymentRoutes = require('./routes/paymentRoutes');
+const adminRoutes = require('./routes/admin.routes');
+const boardRoutes = require('./routes/boardRoutes');
 
 const app = express();
 
@@ -19,6 +21,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+app.use("/uploads", express.static("uploads"));
+
 
 app.get('/', (req, res) => {
   res.json({
@@ -47,7 +51,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tutors', tutorRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/sessions', sessionRoutes);
-app.use('/api/payments', paymentRoutes);
+// app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/boards', boardRoutes);
+
+
 
 app.use(notFound);
 app.use(errorHandler);

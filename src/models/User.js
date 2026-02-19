@@ -3,12 +3,15 @@ const bcrypt = require('bcryptjs');
 
 class User {
   static async create(userData) {
-    const { email, password, full_name, phone, role } = userData;
-    const hashedPassword = password
+    const { email, password, first_name, last_name, phone, role } = userData;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await pool.query(
-      'INSERT INTO users (email, password, full_name, phone, role) VALUES (?, ?, ?, ?, ?)',
-      [email, hashedPassword, full_name, phone, role]
+      `INSERT INTO users 
+      (first_name, last_name, email, password, phone, role) 
+      VALUES (?, ?, ?, ?, ?, ?)`,
+      [first_name, last_name, email, hashedPassword, phone, role]
     );
 
     return result.insertId;
@@ -24,7 +27,9 @@ class User {
 
   static async findById(id) {
     const [rows] = await pool.query(
-      'SELECT id, email, full_name, phone, role, is_verified, is_active, created_at FROM users WHERE id = ?',
+      `SELECT id, first_name, last_name, email, phone, role, 
+              is_verified, is_active, created_at 
+       FROM users WHERE id = ?`,
       [id]
     );
     return rows[0];
@@ -44,6 +49,7 @@ class User {
     if (fields.length === 0) return false;
 
     values.push(id);
+
     const [result] = await pool.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
       values
@@ -53,12 +59,14 @@ class User {
   }
 
   static async verifyPassword(plainPassword, storedPassword) {
-    return plainPassword === storedPassword;
+    return await bcrypt.compare(plainPassword, storedPassword);
   }
 
   static async getAllByRole(role) {
     const [rows] = await pool.query(
-      'SELECT id, email, full_name, phone, role, is_verified, is_active, created_at FROM users WHERE role = ?',
+      `SELECT id, first_name, last_name, email, phone, role, 
+              is_verified, is_active, created_at 
+       FROM users WHERE role = ?`,
       [role]
     );
     return rows;

@@ -1,3 +1,4 @@
+const bcrypt = require("bcryptjs");
 const TutorProfile = require('../models/TutorProfile');
 const emailService = require('../services/emailService');
 const User = require('../models/User');
@@ -107,6 +108,10 @@ const getPendingTutors = async (req, res, next) => {
   }
 };
 
+const crypto = require("crypto");
+const { pool } = require("../config/database");
+const {sendEmail}= require("../services/emailService");
+
 const approveTutor = async (req, res, next) => {
   try {
     const { tutorId } = req.params;
@@ -115,26 +120,58 @@ const approveTutor = async (req, res, next) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Tutor profile not found'
+        message: "Tutor profile not found"
       });
     }
 
-    const approved = await TutorProfile.approve(tutorId, req.user.id);
+    // 1️⃣ Approve tutor profile
+    await TutorProfile.approve(tutorId, req.user.id);
 
-    if (!approved) {
-      return res.status(400).json({
-        success: false,
-        message: 'Failed to approve tutor'
-      });
-    }
+    // 2️⃣ Activate user (allow login)
+    await pool.query(
+      `UPDATE users 
+       SET is_verified = 1 
+       WHERE id = ?`,
+      [tutorId]
+    );
+
+    // 3️⃣ Generate password setup token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await pool.query(
+      `UPDATE users 
+       SET password_reset_token = ?, 
+           password_reset_expiry = ?
+       WHERE id = ?`,
+      [resetToken, expiry, tutorId]
+    );
 
     const tutor = await User.findById(tutorId);
-    await emailService.sendTutorApprovalEmail(tutor, 'approved');
+
+    // 4️⃣ Send password setup email
+    const resetLink = `${process.env.FRONTEND_URL}/set-password?token=${resetToken}`;
+console.log("RESET TOKEN:154", resetToken);
+console.log("RESET LINK:155", resetLink);
+console.log("EMAIL:156", tutor.email);
+
+    await sendEmail(
+      tutor.email,
+       "Your Tutor Account Has Been Approved 🎉",
+      `
+        <h3>Congratulations ${tutor.first_name}!</h3>
+        <p>Your tutor account has been approved.</p>
+        <p>Please click below to set your password:</p>
+        <a href="${resetLink}">${resetLink}</a>
+        <p>This link expires in 24 hours.</p>
+      `
+    );
 
     res.status(200).json({
       success: true,
-      message: 'Tutor approved successfully'
+      message: "Tutor approved and password setup email sent"
     });
+
   } catch (error) {
     next(error);
   }

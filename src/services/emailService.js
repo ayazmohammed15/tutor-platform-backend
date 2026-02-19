@@ -167,5 +167,6 @@ module.exports = {
   sendRequestRejectedEmail,
   sendAlternateDateEmail,
   sendPaymentSuccessEmail,
-  sendSessionConfirmationEmail
+  sendSessionConfirmationEmail,
+  sendEmail
 };
