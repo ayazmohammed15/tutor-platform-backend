@@ -46,17 +46,20 @@ class SessionRequest {
   static async findByTutorId(tutorId) {
     const [rows] = await pool.query(
       `SELECT sr.*,
-              s.email as student_email, s.full_name as student_name,
-              sub.class_name, sub.chapter_name, sub.topic_name
-       FROM session_requests sr
-       JOIN users s ON sr.student_id = s.id
-       LEFT JOIN subjects sub ON sr.subject_id = sub.id
-       WHERE sr.tutor_id = ?
-       ORDER BY sr.created_at DESC`,
+            s.email AS student_email,
+            CONCAT(s.first_name, ' ', s.last_name) AS student_name,
+            sub.subject_name
+     FROM session_requests sr
+     JOIN users s ON sr.student_id = s.id
+     LEFT JOIN subjects sub ON sr.subject_id = sub.id
+     WHERE sr.tutor_id = ?
+     ORDER BY sr.created_at DESC`,
       [tutorId]
     );
+
     return rows;
   }
+
 
   static async getPendingByTutorId(tutorId) {
     const [rows] = await pool.query(

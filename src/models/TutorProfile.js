@@ -274,25 +274,43 @@ class TutorProfile {
   }
 
   static async searchTutors(filters) {
-    let query = `
-      SELECT DISTINCT tp.*, 
-             u.email, 
-             u.first_name, 
-             u.last_name, 
-             u.phone
-      FROM tutor_profiles tp
-      JOIN users u ON tp.user_id = u.id
-      WHERE tp.is_approved = TRUE 
-      AND tp.approval_status = 'approved'
-    `;
+  let query = `
+    SELECT DISTINCT tp.*, 
+           u.first_name,
+           u.last_name,
+           u.email,
+           u.phone
+    FROM tutor_profiles tp
+    JOIN users u ON tp.user_id = u.id
+    JOIN tutor_subjects ts ON ts.tutor_profile_id = tp.id
+    JOIN subjects s ON s.id = ts.subject_id
+    JOIN board_classes bc ON s.board_class_id = bc.id
+    WHERE tp.is_approved = 1
+    AND tp.approval_status = 'approved'
+  `;
 
-    const values = [];
+  const values = [];
 
-    query += ' ORDER BY tp.created_at DESC';
-
-    const [rows] = await pool.query(query, values);
-    return rows;
+  if (filters.board_id) {
+    query += ` AND bc.board_id = ?`;
+    values.push(filters.board_id);
   }
+
+  if (filters.class_id) {
+    query += ` AND bc.class_id = ?`;
+    values.push(filters.class_id);
+  }
+
+  if (filters.subject_id) {
+    query += ` AND s.id = ?`;
+    values.push(filters.subject_id);
+  }
+
+  query += ` ORDER BY tp.created_at DESC`;
+
+  const [rows] = await pool.query(query, values);
+  return rows;
+}
 }
 
 module.exports = TutorProfile;

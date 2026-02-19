@@ -212,12 +212,12 @@ const rejectTutor = async (req, res, next) => {
 
 const searchTutors = async (req, res, next) => {
   try {
-    const { class_name, chapter_name, topic_name } = req.query;
+    const { board_id, class_id, subject_id } = req.query;
 
     const tutors = await TutorProfile.searchTutors({
-      class_name,
-      chapter_name,
-      topic_name
+      board_id,
+      class_id,
+      subject_id
     });
 
     res.status(200).json({
@@ -228,6 +228,8 @@ const searchTutors = async (req, res, next) => {
     next(error);
   }
 };
+
+
 
 const getTutorDetails = async (req, res, next) => {
   try {

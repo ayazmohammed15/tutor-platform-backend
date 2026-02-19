@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {pool} = require('../config/database');
+const { pool } = require('../config/database');
 
 console.log("✅ BoardRoutes file loaded");
 
@@ -74,6 +74,29 @@ router.get('/subjects', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+router.get('/chapters', async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+
+    if (!subjectId) {
+      return res.status(400).json({ message: "subjectId is required" });
+    }
+
+    const [chapters] = await pool.query(
+      `SELECT id, chapter_name, slug
+       FROM chapters
+       WHERE subject_id = ? AND is_active = 1
+       ORDER BY chapter_order ASC`,
+      [subjectId]
+    );
+
+    res.json(chapters);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 
 
 
