@@ -100,7 +100,14 @@ const login = async (req, res, next) => {
 
     console.log("🎉 Login successful");
 
-    const token = generateToken({ userId: user.id, role: user.role });
+    // ✅ FIXED CODE: Add the names to the token payload!
+    const token = generateToken({ 
+      userId: user.id, 
+      role: user.role,
+      first_name: user.first_name, 
+      last_name: user.last_name,
+      email: user.email // It's usually good practice to put the email in the token too
+    });
 
     res.status(200).json({
       success: true,
