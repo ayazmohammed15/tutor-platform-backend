@@ -273,7 +273,7 @@ class TutorProfile {
     return result.affectedRows > 0;
   }
 
-  static async searchTutors(filters) {
+ static async searchTutors(filters) {
   let query = `
     SELECT DISTINCT tp.*, 
            u.first_name,
@@ -282,22 +282,23 @@ class TutorProfile {
            u.phone
     FROM tutor_profiles tp
     JOIN users u ON tp.user_id = u.id
+    JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
     JOIN tutor_subjects ts ON ts.tutor_profile_id = tp.id
     JOIN subjects s ON s.id = ts.subject_id
     JOIN board_classes bc ON s.board_class_id = bc.id
     WHERE tp.is_approved = 1
-    AND tp.approval_status = 'approved'
+      AND tp.approval_status = 'approved'
   `;
 
   const values = [];
 
   if (filters.board_id) {
-    query += ` AND bc.board_id = ?`;
+    query += ` AND tp.board_id = ?`;
     values.push(filters.board_id);
   }
 
   if (filters.class_id) {
-    query += ` AND bc.class_id = ?`;
+    query += ` AND tc.class_id = ?`;
     values.push(filters.class_id);
   }
 

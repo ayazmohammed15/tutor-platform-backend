@@ -101,10 +101,10 @@ const login = async (req, res, next) => {
     console.log("🎉 Login successful");
 
     // ✅ FIXED CODE: Add the names to the token payload!
-    const token = generateToken({ 
-      userId: user.id, 
+    const token = generateToken({
+      userId: user.id,
       role: user.role,
-      first_name: user.first_name, 
+      first_name: user.first_name,
       last_name: user.last_name,
       email: user.email // It's usually good practice to put the email in the token too
     });
@@ -239,7 +239,7 @@ const completeRegistration = async (req, res) => {
       graduationYear,
       experienceYears,
       boardId,
-      classId,
+      classIds,
       teachingMode,
       expectedFee,
       about,
@@ -255,47 +255,47 @@ const completeRegistration = async (req, res) => {
     }
 
     const [invites] = await connection.query(
-  "SELECT * FROM tutor_invites WHERE token = ?",
-  [token]
-);
+      "SELECT * FROM tutor_invites WHERE token = ?",
+      [token]
+    );
 
-if (invites.length === 0) {
-  return res.status(400).json({
-    success: false,
-    message: "Invalid registration link"
-  });
-}
+    if (invites.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid registration link"
+      });
+    }
 
-const invite = invites[0];
+    const invite = invites[0];
 
-// 🔥 Check if already used
-if (invite.status === "registered") {
-  return res.status(400).json({
-    success: false,
-    message: "This registration link has already been used."
-  });
-}
+    // 🔥 Check if already used
+    if (invite.status === "registered") {
+      return res.status(400).json({
+        success: false,
+        message: "This registration link has already been used."
+      });
+    }
 
-// 🔥 Check if expired
-if (new Date(invite.token_expiry) < new Date()) {
-  return res.status(400).json({
-    success: false,
-    message: "This registration link has expired."
-  });
-}
+    // 🔥 Check if expired
+    if (new Date(invite.token_expiry) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "This registration link has expired."
+      });
+    }
 
 
-const [existingUser] = await connection.query(
-  "SELECT id FROM users WHERE email = ?",
-  [invite.email]
-);
+    const [existingUser] = await connection.query(
+      "SELECT id FROM users WHERE email = ?",
+      [invite.email]
+    );
 
-if (existingUser.length > 0) {
-  return res.status(400).json({
-    success: false,
-    message: "User already registered"
-  });
-}
+    if (existingUser.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "User already registered"
+      });
+    }
 
     // 2️⃣ Insert into USERS (without password)
     const [userResult] = await connection.query(
@@ -325,9 +325,9 @@ if (existingUser.length > 0) {
     const [profileResult] = await connection.query(
       `INSERT INTO tutor_profiles
       (user_id, bio, education, experience_years, hourly_rate,
-       board_id, class_id, teaching_mode, demo_link,
+       board_id,teaching_mode, demo_link,
        profile_image, resume, approval_status, is_approved)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
       [
         userId,
         about,
@@ -335,7 +335,6 @@ if (existingUser.length > 0) {
         experienceYears || 0,
         expectedFee || null,
         boardId || null,
-        classId || null,
         teachingMode || null,
         demoLink || null,
         profileImage,
@@ -345,6 +344,22 @@ if (existingUser.length > 0) {
 
     const tutorProfileId = profileResult.insertId;
 
+    // 🔹 Insert multiple classes
+    if (classIds) {
+      let classArray =
+        typeof classIds === "string"
+          ? JSON.parse(classIds)
+          : classIds;
+
+      for (const classId of classArray) {
+        await connection.query(
+          `INSERT INTO tutor_classes
+       (tutor_profile_id, class_id)
+       VALUES (?, ?)`,
+          [tutorProfileId, classId]
+        );
+      }
+    }
     // Insert subjects
     if (subjects) {
       let subjectArray =

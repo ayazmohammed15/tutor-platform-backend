@@ -6,7 +6,7 @@ console.log("✅ BoardRoutes file loaded");
 
 router.get('/', boardController.getBoards);
 router.get('/classes', boardController.getClasses);
-router.get('/subjects', boardController.getSubjects);
+router.post('/subjects', boardController.getSubjects);
 router.get('/chapters', boardController.getChapters);
 
 module.exports = router;

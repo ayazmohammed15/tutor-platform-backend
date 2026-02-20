@@ -51,27 +51,35 @@ exports.getClasses = async (req, res) => {
 ======================== */
 exports.getSubjects = async (req, res) => {
   try {
-    const { boardId, classId } = req.query;
+    const { boardId, classIds } = req.body;
 
-    if (!boardId || !classId) {
-      return res.status(400).json({ message: "boardId and classId are required" });
+    if (!boardId || !classIds || !classIds.length) {
+      return res.status(400).json({
+        message: "boardId and classIds are required"
+      });
     }
 
     const [subjects] = await pool.query(
       `
-      SELECT s.id, s.subject_name, s.slug
-      FROM subjects s
-      JOIN board_classes bc ON s.board_class_id = bc.id
-      WHERE bc.board_id = ?
-        AND bc.class_id = ?
-        AND s.is_active = 1
-      `,
-      [boardId, classId]
+  SELECT 
+    s.id, 
+    s.subject_name, 
+    s.slug,
+    c.class_name
+  FROM subjects s
+  JOIN board_classes bc ON s.board_class_id = bc.id
+  JOIN classes c ON bc.class_id = c.id
+  WHERE bc.board_id = ?
+    AND bc.class_id IN (?)
+    AND s.is_active = 1
+  ORDER BY c.class_order ASC
+  `,
+      [boardId, classIds]
     );
 
     res.json(subjects);
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching subjects:", error);
     res.status(500).json({ message: error.message });
   }
 };
