@@ -7,49 +7,57 @@ const { pool } = require('../config/database');
 
 const register = async (req, res, next) => {
   try {
-    const { email, password, first_name, last_name, phone, role } = req.body;
+    const { email, password, first_name, last_name, phone } = req.body;
 
+    // Basic validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required"
+      });
+    }
+
+    // Check if email already exists
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'Email already registered'
+        message: "Email already registered"
       });
     }
 
+    // 🔒 HARD-CODE ROLE HERE (Student Only)
     const userId = await User.create({
-  email,
-  password,
-  first_name,
-  last_name,
-  phone,
-  role: role || 'student'
-});
+      email,
+      password,
+      first_name,
+      last_name,
+      phone,
+      role: "student"   // ← always student
+    });
 
     const user = await User.findById(userId);
 
-    await emailService.sendWelcomeEmail(user);
-
-    const token = generateToken({ userId: user.id, role: user.role });
+    const token = generateToken({
+      userId: user.id,
+      role: user.role
+    });
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful',
+      message: "Student registration successful",
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          first_name: user.first_name,
-last_name: user.last_name,
-          role: user.role
-        },
+        user,
         token
       }
     });
+
   } catch (error) {
     next(error);
   }
 };
+
+
 
 const login = async (req, res, next) => {
   try {

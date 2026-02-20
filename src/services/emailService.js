@@ -32,7 +32,7 @@ const sendEmail = async (to, subject, html) => {
 const sendWelcomeEmail = async (user) => {
   const subject = 'Welcome to Tutor Booking Platform';
   const html = `
-    <h2>Welcome ${user.full_name}!</h2>
+    <h2>Welcome ${user.first_name}!</h2>
     <p>Thank you for registering on our platform as a ${user.role}.</p>
     ${user.role === 'tutor' ? '<p>Please complete your profile and wait for admin approval to start receiving booking requests.</p>' : ''}
     <p>Best regards,<br>Tutor Booking Team</p>

@@ -5,20 +5,31 @@ const registerValidator = [
     .isEmail()
     .withMessage('Please provide a valid email')
     .normalizeEmail(),
+
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
-  body('full_name')
+
+  body('first_name')
     .trim()
     .notEmpty()
-    .withMessage('Full name is required')
+    .withMessage('First name is required')
     .isLength({ min: 2 })
-    .withMessage('Full name must be at least 2 characters long'),
-  body('role')
+    .withMessage('First name must be at least 2 characters long'),
+
+  body('last_name')
+    .trim()
+    .notEmpty()
+    .withMessage('Last name is required')
+    .isLength({ min: 1 })
+    .withMessage('Last name must be at least 1 character long'),
+
+  body('phone')
     .optional()
-    .isIn(['student', 'tutor'])
-    .withMessage('Role must be either student or tutor')
+    .isLength({ min: 10, max: 15 })
+    .withMessage('Phone number must be valid'),
 ];
+
 
 const loginValidator = [
   body('email')
