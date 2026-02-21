@@ -74,7 +74,7 @@ class AvailabilitySlot {
 
   static async getExcludedDates(tutorId) {
     const [rows] = await pool.query(
-      'SELECT date FROM tutor_unavailable_dates WHERE tutor_id = ?',
+      'SELECT DATE_FORMAT(date, "%Y-%m-%d") as date FROM tutor_unavailable_dates WHERE tutor_id = ?',
       [tutorId]
     );
     return rows;

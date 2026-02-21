@@ -1,5 +1,6 @@
 const AvailabilitySlot = require('../models/AvailabilitySlot');
 const { get } = require('../routes/availabilityRoutes');
+const Session = require('../models/Session');
 
 const createSlot = async (req, res, next) => {
   try {
@@ -153,14 +154,14 @@ const getAvailableSlots = async (req, res, next) => {
       const duration = block.slot_duration;
 
       while (current < endTime) {
-        generatedSlots.push(current.toTimeString().slice(0,5));
+        generatedSlots.push(current.toTimeString().slice(0, 5));
         current = new Date(current.getTime() + duration * 60000);
       }
     });
 
     const booked = await Session.findBookedSlots(tutorId, date);
     const bookedTimes = booked.map(b =>
-      b.scheduled_time.slice(0,5)
+      b.scheduled_time.slice(0, 5)
     );
 
     const available = generatedSlots.filter(
@@ -225,44 +226,59 @@ const getAvailableSlotsByDate = async (req, res, next) => {
   try {
     const { tutorId, date } = req.params;
 
-    // 1️⃣ Check month range
+    // 1️⃣ Check availability range
+    // 1️⃣ Check availability range properly
     const range = await AvailabilitySlot.getRange(tutorId);
-    if (!range || date < range.start_date || date > range.end_date) {
-      return res.status(400).json({
-        success: false,
-        message: "Date is outside tutor availability range"
+
+    if (!range) {
+      return res.status(200).json({
+        success: true,
+        data: { date, slots: [] }
+      });
+    }
+
+    const selectedDate = new Date(date);
+    const startDate = new Date(range.start_date);
+    const endDate = new Date(range.end_date);
+
+    // Normalize times
+    selectedDate.setHours(0, 0, 0, 0);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < startDate || selectedDate > endDate) {
+      return res.status(200).json({
+        success: true,
+        data: { date, slots: [] }
       });
     }
 
     // 2️⃣ Check excluded date
     const excludedDates = await AvailabilitySlot.getExcludedDates(tutorId);
-    const isExcluded = excludedDates.some(d => 
-      new Date(d.date).toISOString().split('T')[0] === date
-    );
+
+    const isExcluded = excludedDates.some(d => d.date === date);
 
     if (isExcluded) {
-      return res.status(400).json({
-        success: false,
-        message: "Tutor is unavailable on this date"
+      return res.status(200).json({
+        success: true,
+        data: { date, slots: [] }
       });
     }
 
     // 3️⃣ Get day of week
-    const dayOfWeek = new Date(date).toLocaleString('en-US', { weekday: 'long' });
+    const dayOfWeek = new Date(date)
+      .toLocaleDateString('en-US', { weekday: 'long' });
 
     const weeklyBlocks = await AvailabilitySlot.findByTutorId(tutorId);
     const dayBlocks = weeklyBlocks.filter(b => b.day_of_week === dayOfWeek);
 
-    // 4️⃣ Generate 1-hour slots
     let generatedSlots = [];
 
+    // 4️⃣ Generate slots
     dayBlocks.forEach(block => {
-      let start = block.start_time;
-      let end = block.end_time;
-
+      let current = block.start_time;
+      const end = block.end_time;
       const duration = block.slot_duration;
-
-      let current = start;
 
       while (current < end) {
         const [h, m] = current.split(':').map(Number);
@@ -277,21 +293,24 @@ const getAvailableSlotsByDate = async (req, res, next) => {
       }
     });
 
-    // 5️⃣ Remove already booked sessions
+    // 5️⃣ Get booked sessions for that date
     const bookedSessions = await Session.findByTutorId(tutorId);
+
     const bookedTimes = bookedSessions
       .filter(s => s.scheduled_date === date)
       .map(s => s.scheduled_time.slice(0, 5));
 
-    const availableSlots = generatedSlots.filter(
-      slot => !bookedTimes.includes(slot)
-    );
+    // 6️⃣ Return structured slots
+    const structuredSlots = generatedSlots.map(time => ({
+      time,
+      booked: bookedTimes.includes(time)
+    }));
 
     res.status(200).json({
       success: true,
       data: {
         date,
-        slots: availableSlots
+        slots: structuredSlots
       }
     });
 
