@@ -8,7 +8,7 @@ const { pool } = require('../config/database');
 const register = async (req, res, next) => {
   try {
     const { email, password, first_name, last_name, phone } = req.body;
-
+console.log("🔹 Registration attempt for:", email) ;
     // Basic validation
     if (!email || !password) {
       return res.status(400).json({
@@ -42,6 +42,20 @@ const register = async (req, res, next) => {
       userId: user.id,
       role: user.role
     });
+
+    // 📧 ==========================================
+    // TRIGGER STUDENT WELCOME EMAIL HERE
+    // ==========================================
+    if (user.role === 'student') {
+      try {
+        // We await it, but catch any errors so it doesn't crash the registration
+        await emailService.sendWelcomeEmail(user);
+
+      } catch (emailError) {
+        console.error("Non-fatal error: Failed to send welcome email:", emailError);
+      }
+    }
+    // ==========================================
 
     res.status(201).json({
       success: true,

@@ -30,13 +30,15 @@ const sendEmail = async (to, subject, html) => {
 };
 
 const sendWelcomeEmail = async (user) => {
-  const subject = 'Welcome to Tutor Booking Platform';
+  const subject = 'Welcome to Tutofly!';
   const html = `
-    <h2>Welcome ${user.first_name}!</h2>
-    <p>Thank you for registering on our platform as a ${user.role}.</p>
-    ${user.role === 'tutor' ? '<p>Please complete your profile and wait for admin approval to start receiving booking requests.</p>' : ''}
-    <p>Best regards,<br>Tutor Booking Team</p>
+    <h2>Welcome ${user.first_name}! 👋</h2>
+    <p>Thank you for registering on our platform.</p>
+    <p>Your student account is now active. You can start browsing subjects, viewing tutor profiles, and booking your first session right away!</p>
+    <br/>
+    <p>Best regards,<br>The Tutofly Team</p>
   `;
+  console.log("Sending welcome email to:", user.email);
 
   return await sendEmail(user.email, subject, html);
 };
@@ -44,7 +46,7 @@ const sendWelcomeEmail = async (user) => {
 const sendTutorApprovalEmail = async (tutor, status) => {
   const subject = status === 'approved' ? 'Profile Approved!' : 'Profile Status Update';
   const html = `
-    <h2>Hello ${tutor.full_name},</h2>
+    <h2>Hello ${tutor.first_name},</h2>
     <p>Your tutor profile has been <strong>${status}</strong>.</p>
     ${status === 'approved' ? '<p>You can now start receiving booking requests from students!</p>' : '<p>Please contact support for more information.</p>'}
     <p>Best regards,<br>Tutor Booking Team</p>
@@ -56,7 +58,7 @@ const sendTutorApprovalEmail = async (tutor, status) => {
 const sendSessionRequestEmail = async (tutor, sessionRequest) => {
   const subject = 'New Session Request';
   const html = `
-    <h2>Hello ${tutor.full_name},</h2>
+    <h2>Hello ${tutor.first_name},</h2>
     <p>You have received a new session request from <strong>${sessionRequest.student_name}</strong>.</p>
     <p><strong>Details:</strong></p>
     <ul>
@@ -74,7 +76,7 @@ const sendSessionRequestEmail = async (tutor, sessionRequest) => {
 const sendRequestAcceptedEmail = async (student, session) => {
   const subject = 'Session Request Accepted!';
   const html = `
-    <h2>Great News ${student.full_name}!</h2>
+    <h2>Great News ${student.first_name}!</h2>
     <p>Your session request has been <strong>accepted</strong> by ${session.tutor_name}.</p>
     <p><strong>Session Details:</strong></p>
     <ul>
@@ -92,7 +94,7 @@ const sendRequestAcceptedEmail = async (student, session) => {
 const sendRequestRejectedEmail = async (student, sessionRequest) => {
   const subject = 'Session Request Update';
   const html = `
-    <h2>Hello ${student.full_name},</h2>
+    <h2>Hello ${student.first_name},</h2>
     <p>Unfortunately, your session request for ${sessionRequest.requested_date} at ${sessionRequest.requested_time} has been declined by the tutor.</p>
     <p>Please try booking with another tutor or choose a different time slot.</p>
     <p>Best regards,<br>Tutor Booking Team</p>
@@ -104,7 +106,7 @@ const sendRequestRejectedEmail = async (student, sessionRequest) => {
 const sendAlternateDateEmail = async (student, sessionRequest) => {
   const subject = 'Alternate Date Suggested';
   const html = `
-    <h2>Hello ${student.full_name},</h2>
+    <h2>Hello ${student.first_name},</h2>
     <p>The tutor has suggested an alternate date for your session:</p>
     <ul>
       <li>Suggested Date: ${sessionRequest.suggested_date}</li>
@@ -120,7 +122,7 @@ const sendAlternateDateEmail = async (student, sessionRequest) => {
 const sendPaymentSuccessEmail = async (student, session) => {
   const subject = 'Payment Successful - Session Confirmed';
   const html = `
-    <h2>Payment Confirmed ${student.full_name}!</h2>
+    <h2>Payment Confirmed ${student.first_name}!</h2>
     <p>Your payment has been processed successfully.</p>
     <p><strong>Session Details:</strong></p>
     <ul>
@@ -141,7 +143,7 @@ const sendPaymentSuccessEmail = async (student, session) => {
 const sendSessionConfirmationEmail = async (tutor, session) => {
   const subject = 'Session Payment Confirmed';
   const html = `
-    <h2>Hello ${tutor.full_name},</h2>
+    <h2>Hello ${tutor.first_name},</h2>
     <p>The student has completed payment for the upcoming session.</p>
     <p><strong>Session Details:</strong></p>
     <ul>
