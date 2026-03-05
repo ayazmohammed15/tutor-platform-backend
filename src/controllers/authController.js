@@ -112,6 +112,20 @@ const login = async (req, res, next) => {
       });
     }
 
+if (user.role === "tutor") {
+  const [profile] = await pool.query(
+    "SELECT approval_status FROM tutor_profiles WHERE user_id = ?",
+    [user.id]
+  );
+
+  if (!profile.length || profile[0].approval_status !== "approved") {
+    return res.status(403).json({
+      success: false,
+      message: "Your account is under review. Please wait for admin approval."
+    });
+  }
+}
+
     console.log("🎉 Login successful");
 
     // ✅ FIXED CODE: Add the names to the token payload!

@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { sendTutorInvite, getPendingTutors } = require("../controllers/admin.controller");
+const  adminController = require("../controllers/admin.controller");
 const tutorController = require("../controllers/tutorController");
 
 const { authenticate, authorize } = require("../middleware/auth");
@@ -10,14 +10,20 @@ router.post(
   "/send-tutor-invite",
   authenticate,
   authorize("admin"),
-  sendTutorInvite
+  adminController.sendTutorInvite
+);
+router.get(
+  "/students",
+  authenticate,
+  authorize("admin"),
+  adminController.getStudents
 );
 
 router.get(
-  "/pending-tutors",
+  "/tutors/status/:status",
   authenticate,
   authorize("admin"),
-  getPendingTutors
+  tutorController.getTutorsByStatus
 );
 
 router.put(

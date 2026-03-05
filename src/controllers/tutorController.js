@@ -1,3 +1,4 @@
+const { pool } = require('../config/database');
 const bcrypt = require("bcryptjs");
 const TutorProfile = require('../models/TutorProfile');
 const emailService = require('../services/emailService');
@@ -95,21 +96,64 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
-const getPendingTutors = async (req, res, next) => {
+const getTutorsByStatus = async (req, res) => {
   try {
-    const tutors = await TutorProfile.getAllPending();
+    const { status } = req.params; // pending | approved | rejected
 
-    res.status(200).json({
+    const [rows] = await pool.query(`
+      SELECT 
+        u.id AS user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.phone,
+
+        tp.id AS tutor_profile_id,
+        tp.bio,
+        tp.education,
+        tp.experience_years,
+        tp.hourly_rate,
+        tp.profile_image,
+        tp.resume,
+        tp.teaching_mode,
+        tp.approval_status,
+        tp.created_at,
+
+        b.board_name,
+
+        GROUP_CONCAT(DISTINCT c.class_name) AS classes,
+        GROUP_CONCAT(DISTINCT s.subject_name) AS subjects
+
+      FROM users u
+      JOIN tutor_profiles tp ON u.id = tp.user_id
+
+      LEFT JOIN boards b ON tp.board_id = b.id
+
+      LEFT JOIN tutor_classes tc ON tp.id = tc.tutor_profile_id
+      LEFT JOIN classes c ON tc.class_id = c.id
+
+      LEFT JOIN tutor_subjects ts ON tp.id = ts.tutor_profile_id
+      LEFT JOIN subjects s ON ts.subject_id = s.id
+
+      WHERE u.role = 'tutor'
+      AND tp.approval_status = ?
+
+      GROUP BY tp.id
+    `,[status]);
+
+    res.json({
       success: true,
-      data: { tutors, count: tutors.length }
+      tutors: rows
     });
+
   } catch (error) {
-    next(error);
+    console.error(error);
+    res.status(500).json({ success: false });
   }
 };
 
 const crypto = require("crypto");
-const { pool } = require("../config/database");
+// const { pool } = require("../config/database");
 const {sendEmail}= require("../services/emailService");
 
 const approveTutor = async (req, res, next) => {
@@ -264,7 +308,7 @@ module.exports = {
   createProfile,
   getMyProfile,
   updateProfile,
-  getPendingTutors,
+  getTutorsByStatus,
   approveTutor,
   rejectTutor,
   searchTutors,

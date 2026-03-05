@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { pool } = require('../config/database');
 const {sendEmail} = require("../services/emailService");
 
-exports.sendTutorInvite = async (req, res) => {
+const sendTutorInvite = async (req, res) => {
   try {
     const { full_name, email, description } = req.body;
     console.log("Request body:", req.body);
@@ -70,22 +70,57 @@ console.log("Registration Link:", registrationLink);
   }
 };
 
-exports.getPendingTutors = async (req, res) => {
+// exports.getPendingTutors = async (req, res) => {
+//   try {
+//     const [rows] = await pool.query(
+//       "SELECT * FROM users WHERE role = 'tutor' AND is_verified = 0"
+//     );
+
+//     res.json({
+//       success: true,
+//       tutors: rows
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error"
+//     });
+//   }
+// };
+
+const getStudents = async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT * FROM users WHERE role = 'tutor' AND is_verified = 0"
-    );
+    const [rows] = await pool.query(`
+      SELECT 
+        id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        is_verified,
+        is_active,
+        created_at
+      FROM users
+      WHERE role = 'student'
+      ORDER BY created_at DESC
+    `);
 
     res.json({
       success: true,
-      tutors: rows
+      students: rows
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
-      message: "Server error"
+      message: "Failed to fetch students"
     });
   }
 };
 
+module.exports = {
+  getStudents,
+  sendTutorInvite
+};

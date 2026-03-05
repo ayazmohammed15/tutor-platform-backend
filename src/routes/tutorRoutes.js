@@ -9,12 +9,11 @@ router.post('/profile', authenticate, authorize('tutor'), tutorProfileValidator,
 router.get('/profile/me', authenticate, authorize('tutor'), tutorController.getMyProfile);
 router.put('/profile', authenticate, authorize('tutor'), tutorProfileValidator, validate, tutorController.updateProfile);
 
-router.get('/pending', authenticate, authorize('admin'), tutorController.getPendingTutors);
+router.get('/status/:status', authenticate, authorize('admin'), tutorController.getTutorsByStatus);
 router.put('/:tutorId/approve', authenticate, authorize('admin'), tutorController.approveTutor);
 router.put('/:tutorId/reject', authenticate, authorize('admin'), tutorController.rejectTutor);
 
 router.get('/search', authenticate, tutorController.searchTutors);
 router.get('/:tutorId', authenticate, tutorController.getTutorDetails);
-console.log(tutorController);
 
 module.exports = router;
