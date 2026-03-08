@@ -53,7 +53,7 @@ app.use('/api/availability', availabilityRoutes);
 app.use('/api/sessions', sessionRoutes);
 // app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/boards', boardRoutes);
+app.use('/api', boardRoutes);
 
 
 

@@ -7,8 +7,8 @@ const { pool } = require('../config/database');
 
 const register = async (req, res, next) => {
   try {
-    const { email, password, first_name, last_name, phone } = req.body;
-console.log("🔹 Registration attempt for:", email) ;
+    const { email, password, first_name, last_name, phone, course_id, board_id, class_id, subject_id } = req.body;
+    console.log("🔹 Registration attempt for:", email);
     // Basic validation
     if (!email || !password) {
       return res.status(400).json({
@@ -33,7 +33,11 @@ console.log("🔹 Registration attempt for:", email) ;
       first_name,
       last_name,
       phone,
-      role: "student"   // ← always student
+      role: "student",
+      course_id,
+      board_id,
+      class_id,
+      subject_id   // ← always student
     });
 
     const user = await User.findById(userId);
@@ -112,19 +116,19 @@ const login = async (req, res, next) => {
       });
     }
 
-if (user.role === "tutor") {
-  const [profile] = await pool.query(
-    "SELECT approval_status FROM tutor_profiles WHERE user_id = ?",
-    [user.id]
-  );
+    if (user.role === "tutor") {
+      const [profile] = await pool.query(
+        "SELECT approval_status FROM tutor_profiles WHERE user_id = ?",
+        [user.id]
+      );
 
-  if (!profile.length || profile[0].approval_status !== "approved") {
-    return res.status(403).json({
-      success: false,
-      message: "Your account is under review. Please wait for admin approval."
-    });
-  }
-}
+      if (!profile.length || profile[0].approval_status !== "approved") {
+        return res.status(403).json({
+          success: false,
+          message: "Your account is under review. Please wait for admin approval."
+        });
+      }
+    }
 
     console.log("🎉 Login successful");
 
@@ -146,7 +150,11 @@ if (user.role === "tutor") {
           email: user.email,
           first_name: user.first_name,
           last_name: user.last_name,
-          role: user.role
+          role: user.role,
+          course_id: user.course_id,
+          board_id: user.board_id,
+          class_id: user.class_id,
+          subject_id: user.subject_id
         },
         token
       }
@@ -266,6 +274,7 @@ const completeRegistration = async (req, res) => {
       university,
       graduationYear,
       experienceYears,
+      courseId,
       boardId,
       classIds,
       teachingMode,
@@ -352,12 +361,13 @@ const completeRegistration = async (req, res) => {
     // 3️⃣ Insert into tutor_profiles
     const [profileResult] = await connection.query(
       `INSERT INTO tutor_profiles
-      (user_id, bio, education, experience_years, hourly_rate,
+      (user_id,course_id, bio, education, experience_years, hourly_rate,
        board_id,teaching_mode, demo_link,
        profile_image, resume, approval_status, is_approved)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
       [
         userId,
+        courseId || null,
         about,
         education,
         experienceYears || 0,

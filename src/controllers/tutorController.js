@@ -256,9 +256,10 @@ const rejectTutor = async (req, res, next) => {
 
 const searchTutors = async (req, res, next) => {
   try {
-    const { board_id, class_id, subject_id } = req.query;
+    const { course_id, board_id, class_id, subject_id } = req.query;
 
     const tutors = await TutorProfile.searchTutors({
+      course_id,
       board_id,
       class_id,
       subject_id

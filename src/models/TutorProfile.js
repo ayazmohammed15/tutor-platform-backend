@@ -273,45 +273,49 @@ class TutorProfile {
     return result.affectedRows > 0;
   }
 
- static async searchTutors(filters) {
-  let query = `
-    SELECT DISTINCT tp.*, 
-           u.first_name,
-           u.last_name,
-           u.email,
-           u.phone
-    FROM tutor_profiles tp
-    JOIN users u ON tp.user_id = u.id
-    JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
-    JOIN tutor_subjects ts ON ts.tutor_profile_id = tp.id
-    JOIN subjects s ON s.id = ts.subject_id
-    JOIN board_classes bc ON s.board_class_id = bc.id
-    WHERE tp.is_approved = 1
+  static async searchTutors(filters) {
+    let query = `
+                SELECT DISTINCT tp.*, 
+            u.first_name,
+            u.last_name,
+            u.email,
+            u.phone
+      FROM tutor_profiles tp
+      JOIN users u ON tp.user_id = u.id
+      JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
+      JOIN tutor_subjects ts ON ts.tutor_profile_id = tp.id
+      JOIN subjects s ON s.id = ts.subject_id
+      JOIN board_classes bc ON bc.id = s.board_class_id
+      WHERE tp.is_approved = 1
       AND tp.approval_status = 'approved'
   `;
 
-  const values = [];
+    const values = [];
 
-  if (filters.board_id) {
-    query += ` AND tp.board_id = ?`;
-    values.push(filters.board_id);
+    if (filters.course_id) {
+      query += ` AND tp.course_id = ?`;
+      values.push(filters.course_id);
+    }
+    if (filters.board_id) {
+      query += ` AND tp.board_id = ?`;
+      values.push(filters.board_id);
+    }
+
+    if (filters.class_id) {
+      query += ` AND tc.class_id = ?`;
+      values.push(filters.class_id);
+    }
+
+    if (filters.subject_id) {
+      query += ` AND ts.subject_id = ?`;
+      values.push(filters.subject_id);
+    }
+
+    query += ` ORDER BY tp.created_at DESC`;
+
+    const [rows] = await pool.query(query, values);
+    return rows;
   }
-
-  if (filters.class_id) {
-    query += ` AND tc.class_id = ?`;
-    values.push(filters.class_id);
-  }
-
-  if (filters.subject_id) {
-    query += ` AND s.id = ?`;
-    values.push(filters.subject_id);
-  }
-
-  query += ` ORDER BY tp.created_at DESC`;
-
-  const [rows] = await pool.query(query, values);
-  return rows;
-}
 }
 
 module.exports = TutorProfile;

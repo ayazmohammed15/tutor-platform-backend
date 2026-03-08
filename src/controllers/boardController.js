@@ -1,12 +1,34 @@
 const { pool } = require('../config/database');
 
 /* ========================
+   GET ALL COURSES
+======================== */
+exports.getCourses = async (req, res) => {
+  try {
+    const [courses] = await pool.query(
+      `SELECT id, course_name, slug
+       FROM courses
+       WHERE is_active = 1`
+    );
+
+    res.json(courses);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ========================
    GET ALL BOARDS
 ======================== */
 exports.getBoards = async (req, res) => {
   try {
-    const [boards] = await pool.query('SELECT * FROM boards');
+
+    const [boards] = await pool.query(
+      `SELECT id, board_name FROM boards WHERE is_active = 1`
+    );
+
     res.json(boards);
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
