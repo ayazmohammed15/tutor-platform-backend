@@ -275,22 +275,35 @@ const getAvailableSlotsByDate = async (req, res, next) => {
     let generatedSlots = [];
 
     // 4️⃣ Generate slots
+    const BUFFER_MINUTES = 15;
+
     dayBlocks.forEach(block => {
+
       let current = block.start_time;
       const end = block.end_time;
       const duration = block.slot_duration;
 
-      while (current < end) {
+      while (true) {
+
         const [h, m] = current.split(':').map(Number);
-        const nextTime = new Date(0, 0, 0, h, m + duration);
-        const nextStr = nextTime.toTimeString().slice(0, 5);
 
-        if (nextStr <= end) {
-          generatedSlots.push(current);
-        }
+        const startTime = new Date(0, 0, 0, h, m);
+        const endTime = new Date(startTime.getTime() + duration * 60000);
 
-        current = nextStr;
+        const endStr = endTime.toTimeString().slice(0, 5);
+
+        if (endStr > end) break;
+
+        generatedSlots.push(current);
+
+        const nextStart = new Date(
+          startTime.getTime() + (duration + BUFFER_MINUTES) * 60000
+        );
+
+        current = nextStart.toTimeString().slice(0, 5);
+
       }
+
     });
 
     // 5️⃣ Get booked sessions for that date

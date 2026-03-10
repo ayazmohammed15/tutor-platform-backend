@@ -58,14 +58,72 @@ const createSessionRequest = async (req, res, next) => {
 
     await connection.beginTransaction();
 
-    const [existingSession] = await connection.query(
-      `SELECT id FROM sessions WHERE tutor_id = ? AND scheduled_date = ? AND scheduled_time = ? FOR UPDATE`,
+    // const [existingSession] = await connection.query(
+    //   `SELECT id FROM sessions WHERE tutor_id = ? AND scheduled_date = ? AND scheduled_time = ? FOR UPDATE`,
+    //   [tutor_id, requestedDateOnly, requested_time]
+    // );
+
+    // if (existingSession.length > 0) {
+    //   await connection.rollback();
+    //   return res.status(400).json({ success: false, message: 'This time slot is already booked' });
+    // }
+    const MAX_CAPACITY = 5;
+
+    // lock rows to avoid race condition
+    const [slotBookings] = await connection.query(
+      `SELECT subject_id, COUNT(*) as booking_count
+   FROM session_requests
+   WHERE tutor_id = ?
+   AND requested_date = ?
+   AND requested_time = ?
+   AND status IN ('pending','accepted')
+   GROUP BY subject_id
+   FOR UPDATE`,
       [tutor_id, requestedDateOnly, requested_time]
     );
 
-    if (existingSession.length > 0) {
+    if (slotBookings.length > 0) {
+
+      const slotSubject = slotBookings[0].subject_id;
+      const bookingCount = slotBookings[0].booking_count;
+
+      // Rule 1: Different subject cannot join same slot
+      if (slotSubject !== subject_id) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'This slot is already reserved for another subject'
+        });
+      }
+
+      // Rule 2: Slot capacity reached
+      if (bookingCount >= MAX_CAPACITY) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'This slot is already full'
+        });
+      }
+    }
+
+    const [duplicate] = await connection.query(
+      `SELECT id 
+   FROM session_requests
+   WHERE student_id = ?
+   AND tutor_id = ?
+   AND requested_date = ?
+   AND requested_time = ?
+   AND status IN ('pending','accepted')
+   LIMIT 1`,
+      [req.user.id, tutor_id, requestedDateOnly, requested_time]
+    );
+
+    if (duplicate.length > 0) {
       await connection.rollback();
-      return res.status(400).json({ success: false, message: 'This time slot is already booked' });
+      return res.status(400).json({
+        success: false,
+        message: 'You have already booked this slot'
+      });
     }
 
     const requestId = await SessionRequest.create({
