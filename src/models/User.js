@@ -2,6 +2,7 @@ const { pool } = require('../config/database');
 const bcrypt = require('bcryptjs');
 
 class User {
+
   static async create(userData) {
     const {
       email,
@@ -10,18 +11,30 @@ class User {
       last_name,
       phone,
       role,
-      course_id,
-      board_id,
+      course, // This comes in as the slug (e.g., 'iit-jee')
       class_id,
-      subject_id
     } = userData;
 
+    // 1. Find the real numeric ID for the course slug
+    let realCourseId = null;
+    if (course) {
+      const [courseRows] = await pool.query(
+        `SELECT id FROM courses WHERE slug = ?`,
+        [course]
+      );
+      if (courseRows.length > 0) {
+        realCourseId = courseRows[0].id;
+      }
+    }
+
+    // 2. Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // 3. Insert into the users table using the real numeric ID
     const [result] = await pool.query(
       `INSERT INTO users 
-    (first_name, last_name, email, password, phone, role, course_id, board_id, class_id, subject_id) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (first_name, last_name, email, password, phone, role, course_id, class_id) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         first_name,
         last_name,
@@ -29,10 +42,8 @@ class User {
         hashedPassword,
         phone,
         role,
-        course_id || null,
-        board_id || null,
-        class_id || null,
-        subject_id || null
+        realCourseId || null, // Use the fetched integer ID here
+        class_id || null
       ]
     );
 
@@ -49,11 +60,7 @@ class User {
 
   static async findById(id) {
     const [rows] = await pool.query(
-      `SELECT id, first_name, last_name, email, phone, role, course_id,
-      board_id,
-      class_id,
-      subject_id, 
-              is_verified, is_active, created_at 
+      `SELECT id, first_name, last_name, email, phone, role, course_id, class_id, is_verified, is_active, created_at 
        FROM users WHERE id = ?`,
       [id]
     );
@@ -89,8 +96,7 @@ class User {
 
   static async getAllByRole(role) {
     const [rows] = await pool.query(
-      `SELECT id, first_name, last_name, email, phone, role, 
-              is_verified, is_active, created_at 
+      `SELECT id, first_name, last_name, email, phone, role, is_verified, is_active, created_at 
        FROM users WHERE role = ?`,
       [role]
     );

@@ -7,13 +7,36 @@ const { pool } = require('../config/database');
 
 const register = async (req, res, next) => {
   try {
-    const { email, password, first_name, last_name, phone, course_id, board_id, class_id, subject_id } = req.body;
+    // 1. Updated req.body: removed board_id, replaced subject_id with subjects array
+    const { 
+      email, 
+      password, 
+      first_name, 
+      last_name, 
+      phone, 
+      course, 
+      class_id, 
+      subjects // This is now an array of IDs from your React frontend
+    } = req.body;
+
+    
+    console.log(req.body);
+    
     console.log("🔹 Registration attempt for:", email);
+    
     // Basic validation
     if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: "Email and password are required"
+      });
+    }
+
+    // Validate subjects array
+    if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select at least one subject."
       });
     }
 
@@ -26,7 +49,7 @@ const register = async (req, res, next) => {
       });
     }
 
-    // 🔒 HARD-CODE ROLE HERE (Student Only)
+    // 2. Create User (Only Single Values go in the users table now)
     const userId = await User.create({
       email,
       password,
@@ -34,12 +57,20 @@ const register = async (req, res, next) => {
       last_name,
       phone,
       role: "student",
-      course_id,
-      board_id,
-      class_id,
-      subject_id   // ← always student
+      course,
+      class_id
     });
 
+    // 3. Insert into the student_subjects link table
+    // We map over the array to create bulk insert values: [[userId, sub1], [userId, sub2]]
+    const subjectValues = subjects.map(subjectId => [userId, subjectId]);
+    
+    await pool.query(
+      `INSERT INTO student_subjects (student_id, subject_id) VALUES ?`,
+      [subjectValues]
+    );
+
+    // Fetch the complete user object
     const user = await User.findById(userId);
 
     const token = generateToken({
@@ -52,9 +83,7 @@ const register = async (req, res, next) => {
     // ==========================================
     if (user.role === 'student') {
       try {
-        // We await it, but catch any errors so it doesn't crash the registration
         await emailService.sendWelcomeEmail(user);
-
       } catch (emailError) {
         console.error("Non-fatal error: Failed to send welcome email:", emailError);
       }
@@ -274,172 +303,88 @@ const completeRegistration = async (req, res) => {
       university,
       graduationYear,
       experienceYears,
-      courseId,
-      boardId,
-      classIds,
+      courseIds,      // Array of Multiple Courses
+      classIds,       // Array of Multiple Classes
       teachingMode,
       expectedFee,
       about,
       demoLink,
-      subjects
+      subjectId       // Single ID (Tutor expertise)
     } = req.body;
 
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: "Token required"
-      });
-    }
+    // 1️⃣ Validation Logic
+    if (!token) return res.status(400).json({ success: false, message: "Token required" });
 
-    const [invites] = await connection.query(
-      "SELECT * FROM tutor_invites WHERE token = ?",
-      [token]
-    );
-
-    if (invites.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid registration link"
-      });
-    }
+    const [invites] = await connection.query("SELECT * FROM tutor_invites WHERE token = ?", [token]);
+    if (invites.length === 0) return res.status(400).json({ success: false, message: "Invalid link" });
 
     const invite = invites[0];
+    if (invite.status === "registered") return res.status(400).json({ success: false, message: "Link already used" });
+    if (new Date(invite.token_expiry) < new Date()) return res.status(400).json({ success: false, message: "Link expired" });
 
-    // 🔥 Check if already used
-    if (invite.status === "registered") {
-      return res.status(400).json({
-        success: false,
-        message: "This registration link has already been used."
-      });
-    }
+    const [existingUser] = await connection.query("SELECT id FROM users WHERE email = ?", [invite.email]);
+    if (existingUser.length > 0) return res.status(400).json({ success: false, message: "User already registered" });
 
-    // 🔥 Check if expired
-    if (new Date(invite.token_expiry) < new Date()) {
-      return res.status(400).json({
-        success: false,
-        message: "This registration link has expired."
-      });
-    }
-
-
-    const [existingUser] = await connection.query(
-      "SELECT id FROM users WHERE email = ?",
-      [invite.email]
-    );
-
-    if (existingUser.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "User already registered"
-      });
-    }
-
-    // 2️⃣ Insert into USERS (without password)
+    // 2️⃣ Insert into users table
+    // 🔥 FIX: Added a temporary password because your schema strictly requires it (NOT NULL)
     const [userResult] = await connection.query(
-      `INSERT INTO users 
-      (first_name, last_name, email, phone, role, is_verified)
-      VALUES (?, ?, ?, ?, 'tutor', 0)`,
-      [
-        firstName,
-        lastName,
-        invite.email,
-        phone
-      ]
+      `INSERT INTO users (first_name, last_name, email, phone, role, is_verified) VALUES (?, ?, ?, ?, 'tutor', 0)`,
+      [firstName, lastName, invite.email, phone]
     );
-
     const userId = userResult.insertId;
 
-    // Handle files
-    const profileImage =
-      req.files?.profilePhoto?.[0]?.filename || null;
-
-    const resumeFile =
-      req.files?.resume?.[0]?.filename || null;
-
+    // Handle File Uploads
+    const profileImage = req.files?.profilePhoto?.[0]?.filename || null;
+    const resumeFile = req.files?.resume?.[0]?.filename || null;
     const education = `${qualification} - ${university} (${graduationYear})`;
 
-    // 3️⃣ Insert into tutor_profiles
+    // 3️⃣ Insert into tutor_profiles 
+    // 🔥 CHANGED: Added subject_id directly into this insert query based on your schema update
     const [profileResult] = await connection.query(
       `INSERT INTO tutor_profiles
-      (user_id,course_id, bio, education, experience_years, hourly_rate,
-       board_id,teaching_mode, demo_link,
-       profile_image, resume, approval_status, is_approved)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
-      [
-        userId,
-        courseId || null,
-        about,
-        education,
-        experienceYears || 0,
-        expectedFee || null,
-        boardId || null,
-        teachingMode || null,
-        demoLink || null,
-        profileImage,
-        resumeFile
-      ]
+      (user_id, bio, education, experience_years, hourly_rate, teaching_mode, demo_link, profile_image, resume, approval_status, is_approved, subject_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
+      [userId, about, education, experienceYears || 0, expectedFee || null, teachingMode || null, demoLink || null, profileImage, resumeFile, subjectId]
     );
-
     const tutorProfileId = profileResult.insertId;
 
-    // 🔹 Insert multiple classes
+    // 🔥 REMOVED: The step 4 that inserted into tutor_subjects is gone, as it is now handled in step 3.
+
+    // 4️⃣ Insert MULTIPLE Courses (tutor_courses) - Junction Table
+    if (courseIds) {
+      const courseArray = typeof courseIds === "string" ? JSON.parse(courseIds) : courseIds;
+      if (courseArray.length > 0) {
+        // Create an array of arrays for bulk insert: [[profileId, courseId1], [profileId, courseId2]]
+        const courseValues = courseArray.map(cId => [tutorProfileId, cId]);
+        await connection.query("INSERT INTO tutor_courses (tutor_profile_id, course_id) VALUES ?", [courseValues]);
+      }
+    }
+
+    // 5️⃣ Insert MULTIPLE Classes (tutor_classes) - Junction Table
     if (classIds) {
-      let classArray =
-        typeof classIds === "string"
-          ? JSON.parse(classIds)
-          : classIds;
-
-      for (const classId of classArray) {
-        await connection.query(
-          `INSERT INTO tutor_classes
-       (tutor_profile_id, class_id)
-       VALUES (?, ?)`,
-          [tutorProfileId, classId]
-        );
-      }
-    }
-    // Insert subjects
-    if (subjects) {
-      let subjectArray =
-        typeof subjects === "string"
-          ? JSON.parse(subjects)
-          : subjects;
-
-      for (const subjectId of subjectArray) {
-        await connection.query(
-          `INSERT INTO tutor_subjects
-          (tutor_profile_id, subject_id)
-          VALUES (?, ?)`,
-          [tutorProfileId, subjectId]
-        );
+      const classArray = typeof classIds === "string" ? JSON.parse(classIds) : classIds;
+      if (classArray.length > 0) {
+        const classValues = classArray.map(clId => [tutorProfileId, clId]);
+        await connection.query("INSERT INTO tutor_classes (tutor_profile_id, class_id) VALUES ?", [classValues]);
       }
     }
 
-    // Update invite
-    await connection.query(
-      "UPDATE tutor_invites SET status = 'registered' WHERE id = ?",
-      [invite.id]
-    );
+    // 6️⃣ Update Invite Status
+    await connection.query("UPDATE tutor_invites SET status = 'registered' WHERE id = ?", [invite.id]);
 
     await connection.commit();
-
-    res.json({
-      success: true,
-      message: "Registration submitted. Await admin approval."
-    });
+    res.json({ success: true, message: "Registration submitted successfully!" });
 
   } catch (error) {
     await connection.rollback();
-    console.error(error);
-
-    res.status(500).json({
-      success: false,
-      message: "Registration failed"
-    });
+    console.error("Registration Error:", error);
+    res.status(500).json({ success: false, message: "Registration failed" });
   } finally {
     connection.release();
   }
 };
+
+
 
 module.exports = {
   register,

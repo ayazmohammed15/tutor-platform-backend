@@ -1,108 +1,114 @@
 const { pool } = require('../config/database');
 
 /* ========================
+   GET ALL MASTER SUBJECTS
+   (Used by Tutors in Step 1)
+======================== */
+exports.getAllSubjects = async (req, res) => {
+  try {
+    const [subjects] = await pool.query(
+      `SELECT id, subject_name, slug FROM subjects WHERE is_active = 1 ORDER BY subject_name ASC`
+    );
+    res.json(subjects);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ========================
    GET ALL COURSES
+   (Used to show Goals like "CBSE", "Foundation", "IIT-JEE")
 ======================== */
 exports.getCourses = async (req, res) => {
   try {
     const [courses] = await pool.query(
-      `SELECT id, course_name, slug
-       FROM courses
-       WHERE is_active = 1`
+      `SELECT id, course_name, slug FROM courses WHERE is_active = 1 ORDER BY id ASC`
     );
-
     res.json(courses);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /* ========================
-   GET ALL BOARDS
+   GET SUBJECTS BY COURSE
+   (Used by Students in Step 3 after picking a Course)
 ======================== */
-exports.getBoards = async (req, res) => {
-  try {
-
-    const [boards] = await pool.query(
-      `SELECT id, board_name FROM boards WHERE is_active = 1`
-    );
-
-    res.json(boards);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
 /* ========================
-   GET CLASSES BY BOARD
+   GET SUBJECTS BY COURSE
 ======================== */
-exports.getClasses = async (req, res) => {
+exports.getSubjectsByCourse = async (req, res) => {
   try {
-    const { boardId } = req.query;
+    const { courseId } = req.query; // This is receiving the slug, e.g., 'iit-jee'
 
-    if (!boardId) {
-      return res.status(400).json({ message: "boardId is required" });
-    }
-
-    const [classes] = await pool.query(
-      `
-      SELECT 
-        c.id,
-        c.class_name,
-        c.class_order,
-        c.slug,
-        c.is_active
-      FROM board_classes bc
-      JOIN classes c ON bc.class_id = c.id
-      WHERE bc.board_id = ? AND c.is_active = 1
-      ORDER BY c.class_order ASC
-      `,
-      [boardId]
-    );
-
-    res.json(classes);
-  } catch (error) {
-    console.error("Error fetching classes:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-/* ========================
-   GET SUBJECTS
-======================== */
-exports.getSubjects = async (req, res) => {
-  try {
-    const { boardId, classIds } = req.body;
-
-    if (!boardId || !classIds || !classIds.length) {
-      return res.status(400).json({
-        message: "boardId and classIds are required"
-      });
+    if (!courseId) {
+      return res.status(400).json({ message: "courseId is required" });
     }
 
     const [subjects] = await pool.query(
       `
-  SELECT 
-    s.id, 
-    s.subject_name, 
-    s.slug,
-    c.class_name
-  FROM subjects s
-  JOIN board_classes bc ON s.board_class_id = bc.id
-  JOIN classes c ON bc.class_id = c.id
-  WHERE bc.board_id = ?
-    AND bc.class_id IN (?)
-    AND s.is_active = 1
-  ORDER BY c.class_order ASC
-  `,
-      [boardId, classIds]
+      SELECT s.id, s.subject_name, s.slug
+      FROM subjects s
+      JOIN course_subjects cs ON s.id = cs.subject_id
+      JOIN courses c ON c.id = cs.course_id
+      WHERE c.slug = ? AND s.is_active = 1
+      ORDER BY s.subject_name ASC
+      `,
+      [courseId]
     );
 
     res.json(subjects);
   } catch (error) {
-    console.error("Error fetching subjects:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getCoursesBySubject = async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+
+    if (!subjectId) {
+      return res.status(400).json({
+        success: false,
+        message: "subjectId is required",
+      });
+    }
+
+    const [courses] = await pool.query(
+      `
+      SELECT c.id, c.course_name, c.slug
+      FROM courses c
+      JOIN course_subjects cs ON c.id = cs.course_id
+      JOIN subjects s ON s.id = cs.subject_id
+      WHERE s.id = ? AND c.is_active = 1
+      ORDER BY c.course_name ASC
+      `,
+      [subjectId]
+    );
+
+    res.json(courses);
+
+  } catch (error) {
+    console.error("Error fetching courses by subject:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/* ========================
+   GET ALL CLASSES
+   (Used for Multi-select in Tutor/Student forms)
+======================== */
+exports.getAllClasses = async (req, res) => {
+  try {
+    const [classes] = await pool.query(
+      `SELECT id, class_name, slug FROM classes WHERE is_active = 1 ORDER BY class_order ASC`
+    );
+    res.json(classes);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -127,7 +133,6 @@ exports.getChapters = async (req, res) => {
 
     res.json(chapters);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

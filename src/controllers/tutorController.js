@@ -98,7 +98,7 @@ const updateProfile = async (req, res, next) => {
 
 const getTutorsByStatus = async (req, res) => {
   try {
-    const { status } = req.params; // pending | approved | rejected
+    const { status } = req.params;
 
     const [rows] = await pool.query(`
       SELECT 
@@ -119,21 +119,21 @@ const getTutorsByStatus = async (req, res) => {
         tp.approval_status,
         tp.created_at,
 
-        b.board_name,
+        s.subject_name,
 
         GROUP_CONCAT(DISTINCT c.class_name) AS classes,
-        GROUP_CONCAT(DISTINCT s.subject_name) AS subjects
+        GROUP_CONCAT(DISTINCT co.course_name) AS courses
 
       FROM users u
       JOIN tutor_profiles tp ON u.id = tp.user_id
 
-      LEFT JOIN boards b ON tp.board_id = b.id
+      LEFT JOIN subjects s ON tp.subject_id = s.id
 
       LEFT JOIN tutor_classes tc ON tp.id = tc.tutor_profile_id
       LEFT JOIN classes c ON tc.class_id = c.id
 
-      LEFT JOIN tutor_subjects ts ON tp.id = ts.tutor_profile_id
-      LEFT JOIN subjects s ON ts.subject_id = s.id
+      LEFT JOIN tutor_courses tco ON tp.id = tco.tutor_profile_id
+      LEFT JOIN courses co ON tco.course_id = co.id
 
       WHERE u.role = 'tutor'
       AND tp.approval_status = ?
