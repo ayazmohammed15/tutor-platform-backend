@@ -8,22 +8,22 @@ const { pool } = require('../config/database');
 const register = async (req, res, next) => {
   try {
     // 1. Updated req.body: removed board_id, replaced subject_id with subjects array
-    const { 
-      email, 
-      password, 
-      first_name, 
-      last_name, 
-      phone, 
-      course, 
-      class_id, 
+    const {
+      email,
+      password,
+      first_name,
+      last_name,
+      phone,
+      course,
+      class_id,
       subjects // This is now an array of IDs from your React frontend
     } = req.body;
 
-    
+
     console.log(req.body);
-    
+
     console.log("🔹 Registration attempt for:", email);
-    
+
     // Basic validation
     if (!email || !password) {
       return res.status(400).json({
@@ -64,7 +64,7 @@ const register = async (req, res, next) => {
     // 3. Insert into the student_subjects link table
     // We map over the array to create bulk insert values: [[userId, sub1], [userId, sub2]]
     const subjectValues = subjects.map(subjectId => [userId, subjectId]);
-    
+
     await pool.query(
       `INSERT INTO student_subjects (student_id, subject_id) VALUES ?`,
       [subjectValues]
@@ -245,14 +245,19 @@ const getProfile = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found"
       });
     }
+
+    user.subjects = user.subjects
+      ? user.subjects.split(",").map(Number)
+      : [];
 
     res.status(200).json({
       success: true,
       data: { user }
     });
+
   } catch (error) {
     next(error);
   }

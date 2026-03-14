@@ -274,46 +274,50 @@ class TutorProfile {
   }
 
   static async searchTutors(filters) {
-    let query = `
-                SELECT DISTINCT tp.*, 
-            u.first_name,
-            u.last_name,
-            u.email,
-            u.phone
-      FROM tutor_profiles tp
-      JOIN users u ON tp.user_id = u.id
-      JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
-      JOIN tutor_subjects ts ON ts.tutor_profile_id = tp.id
-      JOIN subjects s ON s.id = ts.subject_id
-      JOIN board_classes bc ON bc.id = s.board_class_id
-      WHERE tp.is_approved = 1
-      AND tp.approval_status = 'approved'
+
+    const query = `
+    SELECT 
+        tp.*,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.phone,
+
+        MAX(
+            CASE
+                WHEN tc.course_id = ? AND tcl.class_id = ? THEN 3
+                WHEN tc.course_id = ? THEN 2
+                ELSE 1
+            END
+        ) AS match_score
+
+    FROM tutor_profiles tp
+    JOIN users u ON tp.user_id = u.id
+
+    LEFT JOIN tutor_courses tc 
+        ON tc.tutor_profile_id = tp.id
+
+    LEFT JOIN tutor_classes tcl 
+        ON tcl.tutor_profile_id = tp.id
+
+    WHERE tp.subject_id = ?
+    AND tp.is_approved = 1
+    AND tp.approval_status = 'approved'
+
+    GROUP BY tp.id
+
+    ORDER BY match_score DESC, tp.created_at DESC
   `;
 
-    const values = [];
+    const params = [
+      filters.course_id || null,
+      filters.class_id || null,
+      filters.course_id || null,
+      filters.subject_id
+    ];
 
-    if (filters.course_id) {
-      query += ` AND tp.course_id = ?`;
-      values.push(filters.course_id);
-    }
-    if (filters.board_id) {
-      query += ` AND tp.board_id = ?`;
-      values.push(filters.board_id);
-    }
+    const [rows] = await pool.query(query, params);
 
-    if (filters.class_id) {
-      query += ` AND tc.class_id = ?`;
-      values.push(filters.class_id);
-    }
-
-    if (filters.subject_id) {
-      query += ` AND ts.subject_id = ?`;
-      values.push(filters.subject_id);
-    }
-
-    query += ` ORDER BY tp.created_at DESC`;
-
-    const [rows] = await pool.query(query, values);
     return rows;
   }
 }

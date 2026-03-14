@@ -59,13 +59,29 @@ class User {
   }
 
   static async findById(id) {
-    const [rows] = await pool.query(
-      `SELECT id, first_name, last_name, email, phone, role, course_id, class_id, is_verified, is_active, created_at 
-       FROM users WHERE id = ?`,
-      [id]
-    );
-    return rows[0];
-  }
+  const [rows] = await pool.query(
+    `
+    SELECT 
+      u.id,
+      u.first_name,
+      u.last_name,
+      u.email,
+      u.phone,
+      u.role,
+      u.course_id,
+      u.class_id,
+      GROUP_CONCAT(ss.subject_id) AS subjects
+    FROM users u
+    LEFT JOIN student_subjects ss 
+      ON ss.student_id = u.id
+    WHERE u.id = ?
+    GROUP BY u.id
+    `,
+    [id]
+  );
+
+  return rows[0];
+}
 
   static async update(id, updates) {
     const fields = [];

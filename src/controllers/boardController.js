@@ -39,7 +39,7 @@ exports.getCourses = async (req, res) => {
 ======================== */
 exports.getSubjectsByCourse = async (req, res) => {
   try {
-    const { courseId } = req.query; // This is receiving the slug, e.g., 'iit-jee'
+    const { courseId } = req.query;
 
     if (!courseId) {
       return res.status(400).json({ message: "courseId is required" });
@@ -50,14 +50,14 @@ exports.getSubjectsByCourse = async (req, res) => {
       SELECT s.id, s.subject_name, s.slug
       FROM subjects s
       JOIN course_subjects cs ON s.id = cs.subject_id
-      JOIN courses c ON c.id = cs.course_id
-      WHERE c.slug = ? AND s.is_active = 1
+      WHERE cs.course_id = ? AND s.is_active = 1
       ORDER BY s.subject_name ASC
       `,
       [courseId]
     );
 
     res.json(subjects);
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
