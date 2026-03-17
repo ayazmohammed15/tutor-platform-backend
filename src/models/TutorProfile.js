@@ -275,50 +275,64 @@ class TutorProfile {
 
   static async searchTutors(filters) {
 
-    const query = `
-    SELECT 
-        tp.*,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.phone,
+    let query = `
+SELECT 
+    tp.*,
+    u.first_name,
+    u.last_name,
+    u.email,
+    u.phone,
+    s.subject_name,
 
-        MAX(
-            CASE
-                WHEN tc.course_id = ? AND tcl.class_id = ? THEN 3
-                WHEN tc.course_id = ? THEN 2
-                ELSE 1
-            END
-        ) AS match_score
+    MAX(
+        CASE
+            WHEN tc.course_id = ? AND tcl.class_id = ? THEN 3
+            WHEN tc.course_id = ? THEN 2
+            ELSE 1
+        END
+    ) AS match_score
 
-    FROM tutor_profiles tp
-    JOIN users u ON tp.user_id = u.id
+FROM tutor_profiles tp
 
-    LEFT JOIN tutor_courses tc 
-        ON tc.tutor_profile_id = tp.id
+JOIN users u 
+    ON tp.user_id = u.id
 
-    LEFT JOIN tutor_classes tcl 
-        ON tcl.tutor_profile_id = tp.id
+LEFT JOIN tutor_courses tc 
+    ON tc.tutor_profile_id = tp.id
 
-    WHERE tp.subject_id = ?
-    AND tp.is_approved = 1
-    AND tp.approval_status = 'approved'
+LEFT JOIN tutor_classes tcl 
+    ON tcl.tutor_profile_id = tp.id
 
-    GROUP BY tp.id
+LEFT JOIN subjects s
+    ON s.id = tp.subject_id
 
-    ORDER BY match_score DESC, tp.created_at DESC
-  `;
+WHERE tp.is_approved = 1
+AND tp.approval_status = 'approved'
+`;
 
-    const params = [
-      filters.course_id || null,
-      filters.class_id || null,
-      filters.course_id || null,
-      filters.subject_id
+    const values = [
+      filters.course_id,
+      filters.class_id,
+      filters.course_id
     ];
 
-    const [rows] = await pool.query(query, params);
+
+    // MULTIPLE SUBJECT FILTER
+    if (filters.subject_ids && filters.subject_ids.length > 0) {
+      query += ` AND tp.subject_id IN (?)`;
+      values.push(filters.subject_ids);
+    }
+
+
+    query += `
+GROUP BY tp.id
+ORDER BY match_score DESC, tp.experience_years DESC
+`;
+
+    const [rows] = await pool.query(query, values);
 
     return rows;
+
   }
 }
 

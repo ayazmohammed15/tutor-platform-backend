@@ -139,7 +139,7 @@ const getTutorsByStatus = async (req, res) => {
       AND tp.approval_status = ?
 
       GROUP BY tp.id
-    `,[status]);
+    `, [status]);
 
     res.json({
       success: true,
@@ -154,7 +154,7 @@ const getTutorsByStatus = async (req, res) => {
 
 const crypto = require("crypto");
 // const { pool } = require("../config/database");
-const {sendEmail}= require("../services/emailService");
+const { sendEmail } = require("../services/emailService");
 
 const approveTutor = async (req, res, next) => {
   try {
@@ -195,13 +195,13 @@ const approveTutor = async (req, res, next) => {
 
     // 4️⃣ Send password setup email
     const resetLink = `${process.env.FRONTEND_URL}/set-password?token=${resetToken}`;
-console.log("RESET TOKEN:154", resetToken);
-console.log("RESET LINK:155", resetLink);
-console.log("EMAIL:156", tutor.email);
+    console.log("RESET TOKEN:154", resetToken);
+    console.log("RESET LINK:155", resetLink);
+    console.log("EMAIL:156", tutor.email);
 
     await sendEmail(
       tutor.email,
-       "Your Tutor Account Has Been Approved 🎉",
+      "Your Tutor Account Has Been Approved 🎉",
       `
         <h3>Congratulations ${tutor.first_name}!</h3>
         <p>Your tutor account has been approved.</p>
@@ -256,19 +256,41 @@ const rejectTutor = async (req, res, next) => {
 
 const searchTutors = async (req, res, next) => {
   try {
-    const { course_id, board_id, class_id, subject_id } = req.query;
+
+    const { course_id, class_id, subject_id } = req.query;
+
+    let subjectIds = [];
+
+    // if subject selected manually
+    if (subject_id) {
+
+      subjectIds = [parseInt(subject_id)];
+
+    } else {
+
+      // fetch all student subjects automatically
+      const [subjects] = await pool.query(
+        `SELECT subject_id 
+         FROM student_subjects 
+         WHERE student_id = ?`,
+        [req.user.id]
+      );
+
+      subjectIds = subjects.map(s => s.subject_id);
+
+    }
 
     const tutors = await TutorProfile.searchTutors({
       course_id,
-      board_id,
       class_id,
-      subject_id
+      subject_ids: subjectIds
     });
 
     res.status(200).json({
       success: true,
       data: { tutors, count: tutors.length }
     });
+
   } catch (error) {
     next(error);
   }
