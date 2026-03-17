@@ -2,18 +2,36 @@ const { pool } = require('../config/database');
 
 class SessionRequest {
 
-  static async create(requestData) {
-    const { student_id, tutor_id, subject_id, requested_date, requested_time, notes } = requestData;
+  static async create(connection, requestData) {
+  const {
+    student_id,
+    tutor_id,
+    subject_id,
+    class_id,
+    course_id,
+    requested_date,
+    requested_time,
+    notes
+  } = requestData;
 
-    const [result] = await pool.query(
-      `INSERT INTO session_requests 
-       (student_id, tutor_id, subject_id, requested_date, requested_time, notes) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [student_id, tutor_id, subject_id, requested_date, requested_time, notes]
-    );
+  const [result] = await connection.query(
+    `INSERT INTO session_requests 
+     (student_id, tutor_id, subject_id, class_id, course_id, requested_date, requested_time, notes) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      student_id,
+      tutor_id,
+      subject_id,
+      class_id,
+      course_id,
+      requested_date,
+      requested_time,
+      notes
+    ]
+  );
 
-    return result.insertId;
-  }
+  return result.insertId;
+}
 
   /* ================= FIND BY ID ================= */
 

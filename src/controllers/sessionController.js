@@ -13,9 +13,11 @@ const createSessionRequest = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Only students can create session requests' });
     }
 
-    let { tutor_id, subject_id, requested_date, requested_time, notes } = req.body;
+    let { tutor_id, subject_id,class_id,course_id, requested_date, requested_time, notes } = req.body;
     tutor_id = parseInt(tutor_id, 10);
     subject_id = subject_id !== undefined && subject_id !== null && subject_id !== '' ? parseInt(subject_id, 10) : null;
+    class_id = class_id !== undefined && class_id !== null && class_id !== '' ? parseInt(class_id, 10) : null;
+    course_id = course_id !== undefined && course_id !== null && course_id !== '' ? parseInt(course_id, 10) : null;
     requested_time = String(requested_time).slice(0, 5);
     const requestedDateOnly = requested_date.split('T')[0];
     const reqDate = new Date(requestedDateOnly);
@@ -74,48 +76,75 @@ const createSessionRequest = async (req, res, next) => {
 
     // lock rows to avoid race condition
     const [slotBookings] = await connection.query(
-      `SELECT subject_id, COUNT(*) as booking_count
-   FROM session_requests
-   WHERE tutor_id = ?
-   AND requested_date = ?
-   AND requested_time = ?
-   AND status IN ('pending','accepted')
-   GROUP BY subject_id
-   FOR UPDATE`,
-      [tutor_id, requestedDateOnly, requested_time]
-    );
+  `SELECT 
+  sr.subject_id,
+  sr.class_id,
+  sr.course_id,
+  c.class_name,
+  co.course_name,
+  COUNT(*) as booking_count
+FROM session_requests sr
+LEFT JOIN classes c ON sr.class_id = c.id
+LEFT JOIN courses co ON sr.course_id = co.id
+WHERE sr.tutor_id = ?
+AND sr.requested_date = ?
+AND sr.requested_time = ?
+AND sr.status IN ('pending','accepted')
+GROUP BY sr.subject_id, sr.class_id, sr.course_id
+FOR UPDATE`,
+  [tutor_id, requestedDateOnly, requested_time]
+);
 
     if (slotBookings.length > 0) {
-      // Data safety: more than one subject in same tutor/date/time should never happen
-      if (slotBookings.length > 1) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'This slot has conflicting bookings. Please choose another slot'
-        });
-      }
+  if (slotBookings.length > 1) {
+    await connection.rollback();
+    return res.status(400).json({
+      success: false,
+      message: 'This slot has conflicting bookings. Please choose another slot'
+    });
+  }
 
-      const slotSubject = slotBookings[0].subject_id;
-      const bookingCount = Number(slotBookings[0].booking_count);
+  const slot = slotBookings[0]; // ✅ IMPORTANT
 
-      // Rule 1: Different subject cannot join same slot
-      if (slotSubject !== subject_id) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'This slot is already reserved for another subject'
-        });
-      }
+  const slotSubject = slot.subject_id;
+  const bookingCount = Number(slot.booking_count);
 
-      // Rule 2: Slot capacity reached
-      if (bookingCount >= MAX_CAPACITY) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'This slot is already full'
-        });
-      }
-    }
+  // subject check
+  if (slotSubject !== subject_id) {
+    await connection.rollback();
+    return res.status(400).json({
+      success: false,
+      message: 'This slot is already reserved for another subject'
+    });
+  }
+
+  // class check
+  if (slot.class_id !== class_id) {
+    await connection.rollback();
+    return res.status(400).json({
+      success: false,
+       message: `This slot is already booked for ${slot.class_name}`
+    });
+  }
+
+  // course check
+  if (slot.course_id !== course_id) {
+    await connection.rollback();
+    return res.status(400).json({
+      success: false,
+       message: `This slot is already booked for ${slot.class_name} - ${slot.course_name}`
+    });
+  }
+
+  // capacity check
+  if (bookingCount >= MAX_CAPACITY) {
+    await connection.rollback();
+    return res.status(400).json({
+      success: false,
+      message: 'This slot is already full'
+    });
+  }
+}
 
     const [duplicate] = await connection.query(
       `SELECT id 
@@ -137,11 +166,19 @@ const createSessionRequest = async (req, res, next) => {
       });
     }
 
+    console.log("INSERT VALUES:", {
+  class_id,
+  course_id,
+  subject_id,
+  type_class: typeof class_id,
+  type_course: typeof course_id
+});
+
     const [insertResult] = await connection.query(
       `INSERT INTO session_requests
-       (student_id, tutor_id, subject_id, requested_date, requested_time, notes)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.user.id, tutor_id, subject_id, requestedDateOnly, requested_time, notes]
+(student_id, tutor_id, subject_id, class_id, course_id, requested_date, requested_time, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, tutor_id, subject_id, class_id, course_id, requestedDateOnly, requested_time, notes]
     );
     const requestId = insertResult.insertId;
 
