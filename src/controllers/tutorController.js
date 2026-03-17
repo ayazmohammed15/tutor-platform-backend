@@ -256,15 +256,17 @@ const rejectTutor = async (req, res, next) => {
 
 const searchTutors = async (req, res, next) => {
   try {
-
     const { course_id, class_id, subject_id } = req.query;
+    const student = await User.findById(req.user.id);
+    const effectiveCourseId = course_id ? parseInt(course_id, 10) : student?.course_id || null;
+    const effectiveClassId = class_id ? parseInt(class_id, 10) : student?.class_id || null;
 
     let subjectIds = [];
 
     // if subject selected manually
     if (subject_id) {
 
-      subjectIds = [parseInt(subject_id)];
+      subjectIds = [parseInt(subject_id, 10)];
 
     } else {
 
@@ -281,8 +283,8 @@ const searchTutors = async (req, res, next) => {
     }
 
     const tutors = await TutorProfile.searchTutors({
-      course_id,
-      class_id,
+      course_id: effectiveCourseId,
+      class_id: effectiveClassId,
       subject_ids: subjectIds
     });
 

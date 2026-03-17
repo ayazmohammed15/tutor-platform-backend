@@ -21,6 +21,14 @@ router.post(
   authController.register
 );
 
+// Backward-compatible alias for clients using role-specific student registration path
+router.post(
+  "/register/student",
+  registerValidator,
+  validate,
+  authController.register
+);
+
 router.post(
   "/login",
   loginValidator,

@@ -14,6 +14,9 @@ const createSessionRequest = async (req, res, next) => {
     }
 
     let { tutor_id, subject_id, requested_date, requested_time, notes } = req.body;
+    tutor_id = parseInt(tutor_id, 10);
+    subject_id = subject_id !== undefined && subject_id !== null && subject_id !== '' ? parseInt(subject_id, 10) : null;
+    requested_time = String(requested_time).slice(0, 5);
     const requestedDateOnly = requested_date.split('T')[0];
     const reqDate = new Date(requestedDateOnly);
     const today = new Date();
@@ -42,8 +45,8 @@ const createSessionRequest = async (req, res, next) => {
 
     let validSlots = [];
     dayBlocks.forEach(block => {
-      let current = block.start_time;
-      const end = block.end_time;
+      let current = String(block.start_time).slice(0, 5);
+      const end = String(block.end_time).slice(0, 5);
       const duration = block.slot_duration;
       while (current < end) {
         const [h, m] = current.split(':').map(Number);
@@ -83,9 +86,17 @@ const createSessionRequest = async (req, res, next) => {
     );
 
     if (slotBookings.length > 0) {
+      // Data safety: more than one subject in same tutor/date/time should never happen
+      if (slotBookings.length > 1) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'This slot has conflicting bookings. Please choose another slot'
+        });
+      }
 
       const slotSubject = slotBookings[0].subject_id;
-      const bookingCount = slotBookings[0].booking_count;
+      const bookingCount = Number(slotBookings[0].booking_count);
 
       // Rule 1: Different subject cannot join same slot
       if (slotSubject !== subject_id) {
@@ -126,17 +137,15 @@ const createSessionRequest = async (req, res, next) => {
       });
     }
 
-    const requestId = await SessionRequest.create({
-      student_id: req.user.id,
-      tutor_id,
-      subject_id,
-      requested_date: requestedDateOnly,
-      requested_time,
-      notes
-    });
+    const [insertResult] = await connection.query(
+      `INSERT INTO session_requests
+       (student_id, tutor_id, subject_id, requested_date, requested_time, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.user.id, tutor_id, subject_id, requestedDateOnly, requested_time, notes]
+    );
+    const requestId = insertResult.insertId;
 
     await connection.commit();
-    connection.release();
 
     const sessionRequest = await SessionRequest.findById(requestId);
 
@@ -168,9 +177,10 @@ const createSessionRequest = async (req, res, next) => {
   } catch (error) {
     if (connection) {
       await connection.rollback();
-      connection.release();
     }
     next(error);
+  } finally {
+    connection.release();
   }
 };
 
@@ -202,28 +212,89 @@ const getPendingRequests = async (req, res, next) => {
 };
 
 const acceptRequest = async (req, res, next) => {
+  const connection = await pool.getConnection();
+  let transactionStarted = false;
   try {
     if (req.user.role !== 'tutor') return res.status(403).json({ success: false, message: 'Only tutors can accept requests' });
 
     const { requestId } = req.params;
-    const sessionRequest = await SessionRequest.findById(requestId);
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const [requestRows] = await connection.query(
+      `SELECT * FROM session_requests WHERE id = ? FOR UPDATE`,
+      [requestId]
+    );
+    const sessionRequest = requestRows[0];
 
-    if (!sessionRequest) return res.status(404).json({ success: false, message: 'Request not found' });
-    if (sessionRequest.tutor_id !== req.user.id) return res.status(403).json({ success: false, message: 'You can only accept your own requests' });
-    if (sessionRequest.status !== 'pending') return res.status(400).json({ success: false, message: 'Request already processed' });
+    if (!sessionRequest) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: 'Request not found' });
+    }
+    if (sessionRequest.tutor_id !== req.user.id) {
+      await connection.rollback();
+      return res.status(403).json({ success: false, message: 'You can only accept your own requests' });
+    }
+    if (sessionRequest.status !== 'pending') {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: 'Request already processed' });
+    }
 
-    await SessionRequest.updateStatus(requestId, 'accepted');
+    const MAX_CAPACITY = 5;
+    const [slotBookings] = await connection.query(
+      `SELECT subject_id, COUNT(*) as booking_count
+       FROM session_requests
+       WHERE tutor_id = ?
+         AND requested_date = ?
+         AND requested_time = ?
+         AND status IN ('pending','accepted')
+       GROUP BY subject_id
+       FOR UPDATE`,
+      [sessionRequest.tutor_id, sessionRequest.requested_date, sessionRequest.requested_time]
+    );
 
-    const sessionId = await Session.create({
-      session_request_id: requestId,
-      student_id: sessionRequest.student_id,
-      tutor_id: sessionRequest.tutor_id,
-      subject_id: sessionRequest.subject_id,
-      scheduled_date: sessionRequest.requested_date,
-      scheduled_time: sessionRequest.requested_time,
-      duration_minutes: 60,
-      notes: sessionRequest.notes
-    });
+    if (slotBookings.length > 1) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: 'Conflicting subjects exist for this slot' });
+    }
+
+    if (slotBookings.length === 1) {
+      const slotSubject = slotBookings[0].subject_id;
+      const bookingCount = Number(slotBookings[0].booking_count);
+
+      if (slotSubject !== sessionRequest.subject_id) {
+        await connection.rollback();
+        return res.status(400).json({ success: false, message: 'This slot is reserved for another subject' });
+      }
+
+      if (bookingCount > MAX_CAPACITY) {
+        await connection.rollback();
+        return res.status(400).json({ success: false, message: 'This slot exceeds maximum capacity' });
+      }
+    }
+
+    await connection.query(
+      `UPDATE session_requests SET status = 'accepted' WHERE id = ?`,
+      [requestId]
+    );
+
+    const [sessionResult] = await connection.query(
+      `INSERT INTO sessions
+       (session_request_id, student_id, tutor_id, subject_id, scheduled_date, scheduled_time, duration_minutes, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        requestId,
+        sessionRequest.student_id,
+        sessionRequest.tutor_id,
+        sessionRequest.subject_id,
+        sessionRequest.requested_date,
+        sessionRequest.requested_time,
+        60,
+        sessionRequest.notes
+      ]
+    );
+    const sessionId = sessionResult.insertId;
+    await connection.commit();
+    transactionStarted = false;
 
     const session = await Session.findById(sessionId);
     const student = await User.findById(sessionRequest.student_id);
@@ -251,7 +322,12 @@ const acceptRequest = async (req, res, next) => {
 
     res.status(200).json({ success: true, message: 'Request accepted successfully', data: { session } });
   } catch (error) {
+    if (connection && transactionStarted) {
+      await connection.rollback();
+    }
     next(error);
+  } finally {
+    connection.release();
   }
 };
 

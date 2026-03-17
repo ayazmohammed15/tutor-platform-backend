@@ -1,6 +1,5 @@
 const AvailabilitySlot = require('../models/AvailabilitySlot');
-const { get } = require('../routes/availabilityRoutes');
-const Session = require('../models/Session');
+const { pool } = require('../config/database');
 
 const createSlot = async (req, res, next) => {
   try {
@@ -225,6 +224,7 @@ const saveAvailability = async (req, res, next) => {
 const getAvailableSlotsByDate = async (req, res, next) => {
   try {
     const { tutorId, date } = req.params;
+    const requestedSubjectId = req.query.subject_id ? parseInt(req.query.subject_id, 10) : null;
 
     // 1️⃣ Check availability range
     // 1️⃣ Check availability range properly
@@ -279,8 +279,8 @@ const getAvailableSlotsByDate = async (req, res, next) => {
 
     dayBlocks.forEach(block => {
 
-      let current = block.start_time;
-      const end = block.end_time;
+      let current = String(block.start_time).slice(0, 5);
+      const end = String(block.end_time).slice(0, 5);
       const duration = block.slot_duration;
 
       while (true) {
@@ -306,18 +306,47 @@ const getAvailableSlotsByDate = async (req, res, next) => {
 
     });
 
-    // 5️⃣ Get booked sessions for that date
-    const bookedSessions = await Session.findByTutorId(tutorId);
+    // 5️⃣ Get current slot occupancy from requests (pending + accepted)
+    const MAX_CAPACITY = 5;
+    const [slotBookings] = await pool.query(
+      `SELECT requested_time, subject_id, COUNT(*) AS booking_count
+       FROM session_requests
+       WHERE tutor_id = ?
+         AND requested_date = ?
+         AND status IN ('pending', 'accepted')
+       GROUP BY requested_time, subject_id`,
+      [tutorId, date]
+    );
 
-    const bookedTimes = bookedSessions
-      .filter(s => s.scheduled_date === date)
-      .map(s => s.scheduled_time.slice(0, 5));
+    const bookingByTime = {};
+    slotBookings.forEach(row => {
+      const time = String(row.requested_time).slice(0, 5);
+      if (!bookingByTime[time]) {
+        bookingByTime[time] = {
+          subject_id: row.subject_id,
+          booking_count: Number(row.booking_count)
+        };
+      }
+    });
 
     // 6️⃣ Return structured slots
-    const structuredSlots = generatedSlots.map(time => ({
-      time,
-      booked: bookedTimes.includes(time)
-    }));
+    const structuredSlots = generatedSlots.map(time => {
+      const slot = bookingByTime[time];
+      const bookingCount = slot ? slot.booking_count : 0;
+      const slotSubjectId = slot ? slot.subject_id : null;
+      const subjectMismatch =
+        requestedSubjectId !== null &&
+        slotSubjectId !== null &&
+        slotSubjectId !== requestedSubjectId;
+      const isFull = bookingCount >= MAX_CAPACITY;
+
+      return {
+        time,
+        booked: isFull || subjectMismatch,
+        booking_count: bookingCount,
+        available_seats: Math.max(0, MAX_CAPACITY - bookingCount)
+      };
+    });
 
     res.status(200).json({
       success: true,
