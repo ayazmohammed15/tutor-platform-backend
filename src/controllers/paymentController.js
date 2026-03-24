@@ -8,71 +8,73 @@ const User = require('../models/User');
 
 const createOrder = async (req, res, next) => {
   try {
-    if (req.user.role !== 'student') {
-      return res.status(403).json({
-        success: false,
-        message: 'Only students can make payments'
-      });
-    }
-
     const { sessionId } = req.params;
-    const session = await Session.findById(sessionId);
 
+    const session = await Session.findById(sessionId);
     if (!session) {
-      return res.status(404).json({
-        success: false,
-        message: 'Session not found'
-      });
+      return res.status(404).json({ success: false, message: 'Session not found' });
     }
 
     if (session.student_id !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only pay for your own sessions'
-      });
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
     if (session.status === 'paid' || session.status === 'completed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Session already paid'
-      });
+      return res.status(400).json({ success: false, message: 'Already paid' });
     }
 
-    const existingPayment = await Payment.findBySessionId(sessionId);
-    if (existingPayment && existingPayment.status === 'completed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment already completed for this session'
-      });
+    const existingPayment = await Payment.findLatestBySessionId(sessionId);
+
+    if (existingPayment) {
+      if (existingPayment.status === 'completed') {
+        return res.status(400).json({ success: false, message: 'Payment already completed' });
+      }
+
+      if (existingPayment.status === 'pending') {
+        return res.json({
+          success: true,
+          data: {
+            orderId: existingPayment.razorpay_order_id,
+            amount: existingPayment.amount,
+            currency: 'INR'
+          }
+        });
+      }
     }
 
     const tutorProfile = await TutorProfile.findByUserId(session.tutor_id);
     const amount = tutorProfile.hourly_rate || 500;
 
-    const order = await razorpayService.createOrder(
-      amount,
-      'INR',
-      `session_${sessionId}_${Date.now()}`
-    );
+    let order;
+
+    if (process.env.PAYMENT_MODE === 'mock') {
+      order = { id: "mock_order_" + Date.now() };
+    } else {
+      order = await razorpayService.createOrder(
+        amount,
+        'INR',
+        `session_${sessionId}_${Date.now()}`
+      );
+    }
 
     await Payment.create({
       session_id: sessionId,
       student_id: req.user.id,
-      amount: amount,
+      amount,
       currency: 'INR',
       razorpay_order_id: order.id
     });
 
-    res.status(200).json({
+    res.json({
       success: true,
       data: {
         orderId: order.id,
-        amount: amount,
+        amount,
         currency: 'INR',
         keyId: process.env.RAZORPAY_KEY_ID
       }
     });
+
   } catch (error) {
     next(error);
   }
@@ -82,26 +84,28 @@ const verifyPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    const isValid = razorpayService.verifyPaymentSignature(
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature
-    );
+    let isValid = true;
+
+    if (process.env.PAYMENT_MODE !== 'mock') {
+      isValid = razorpayService.verifyPaymentSignature(
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature
+      );
+    }
 
     if (!isValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment verification failed'
-      });
+      return res.status(400).json({ success: false, message: 'Verification failed' });
     }
 
     const payment = await Payment.findByOrderId(razorpay_order_id);
 
     if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Payment record not found'
-      });
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.status === 'completed') {
+      return res.json({ success: true, message: 'Already verified' });
     }
 
     await Payment.updatePaymentStatus(razorpay_order_id, {
@@ -113,14 +117,25 @@ const verifyPayment = async (req, res, next) => {
     await Session.updateStatus(payment.session_id, 'paid');
 
     const session = await Session.findById(payment.session_id);
-
     try {
-      const zoomMeeting = await zoomService.createMeeting({
-        topic: `${session.class_name || 'Tutoring'} - ${session.topic_name || 'Session'}`,
-        scheduled_date: session.scheduled_date,
-        scheduled_time: session.scheduled_time,
-        duration_minutes: session.duration_minutes
-      });
+      let zoomMeeting;
+
+      if (process.env.ZOOM_MODE === 'mock') {
+        // 🔥 Dummy Zoom
+        zoomMeeting = {
+          join_url: "https://zoom.us/j/123456789?pwd=test123",
+          meeting_id: "123456789",
+          password: "test123"
+        };
+      } else {
+        // 🔥 Real Zoom (later)
+        zoomMeeting = await zoomService.createMeeting({
+          topic: 'Tutoring Session',
+          scheduled_date: session.scheduled_date,
+          scheduled_time: session.scheduled_time,
+          duration_minutes: session.duration_minutes
+        });
+      }
 
       await Session.addZoomDetails(payment.session_id, {
         zoom_meeting_link: zoomMeeting.join_url,
@@ -135,26 +150,23 @@ const verifyPayment = async (req, res, next) => {
       await emailService.sendPaymentSuccessEmail(student, updatedSession);
       await emailService.sendSessionConfirmationEmail(tutor, updatedSession);
 
-      res.status(200).json({
-        success: true,
-        message: 'Payment verified and session confirmed',
-        data: { session: updatedSession }
-      });
-    } catch (zoomError) {
-      console.error('Zoom meeting creation failed:', zoomError);
+      res.json({ success: true, message: 'Payment successful', data: updatedSession });
 
-      res.status(200).json({
+    } catch (err) {
+      console.error("Zoom Error:", err);
+
+      const updatedSession = await Session.findById(payment.session_id);
+
+      res.json({
         success: true,
-        message: 'Payment verified. Zoom meeting will be created shortly.',
-        data: { session }
+        message: 'Payment successful (Zoom will be added soon)',
+        data: updatedSession
       });
     }
+
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = {
-  createOrder,
-  verifyPayment
-};
+module.exports = { createOrder, verifyPayment };

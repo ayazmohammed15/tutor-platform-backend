@@ -12,14 +12,6 @@ class Payment {
     return result.insertId;
   }
 
-  static async findById(id) {
-    const [rows] = await pool.query(
-      'SELECT * FROM payments WHERE id = ?',
-      [id]
-    );
-    return rows[0];
-  }
-
   static async findByOrderId(orderId) {
     const [rows] = await pool.query(
       'SELECT * FROM payments WHERE razorpay_order_id = ?',
@@ -28,9 +20,9 @@ class Payment {
     return rows[0];
   }
 
-  static async findBySessionId(sessionId) {
+  static async findLatestBySessionId(sessionId) {
     const [rows] = await pool.query(
-      'SELECT * FROM payments WHERE session_id = ?',
+      'SELECT * FROM payments WHERE session_id = ? ORDER BY created_at DESC LIMIT 1',
       [sessionId]
     );
     return rows[0];
