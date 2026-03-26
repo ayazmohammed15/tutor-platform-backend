@@ -66,14 +66,28 @@ const getMyProfile = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { bio, education, experience_years, hourly_rate, subjects } = req.body;
+    // UPDATED: Destructure the new fields matching your React state
+    const { 
+      bio, 
+      education, 
+      experience_years, 
+      hourly_rate, 
+      subject_id, 
+      demo_link, 
+      teaching_mode 
+    } = req.body;
+    
     const updates = {};
 
     if (bio !== undefined) updates.bio = bio;
     if (education !== undefined) updates.education = education;
     if (experience_years !== undefined) updates.experience_years = experience_years;
     if (hourly_rate !== undefined) updates.hourly_rate = hourly_rate;
-    if (subjects !== undefined) updates.subjects = subjects;
+    
+    // UPDATED: Added new fields to the update object
+    if (subject_id !== undefined) updates.subject_id = subject_id;
+    if (demo_link !== undefined) updates.demo_link = demo_link;
+    if (teaching_mode !== undefined) updates.teaching_mode = teaching_mode;
 
     const updated = await TutorProfile.update(req.user.id, updates);
 

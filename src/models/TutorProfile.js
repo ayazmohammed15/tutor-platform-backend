@@ -167,9 +167,11 @@ class TutorProfile {
               u.email, 
               u.first_name, 
               u.last_name, 
-              u.phone
+              u.phone,
+              s.subject_name  -- ADDED THIS
        FROM tutor_profiles tp
        JOIN users u ON tp.user_id = u.id
+       LEFT JOIN subjects s ON tp.subject_id = s.id  -- ADDED THIS JOIN
        WHERE tp.user_id = ?`,
       [userId]
     );
@@ -182,9 +184,11 @@ class TutorProfile {
               u.email, 
               u.first_name, 
               u.last_name, 
-              u.phone
+              u.phone,
+              s.subject_name  -- ADDED THIS
        FROM tutor_profiles tp
        JOIN users u ON tp.user_id = u.id
+       LEFT JOIN subjects s ON tp.subject_id = s.id  -- ADDED THIS JOIN
        WHERE tp.id = ?`,
       [id]
     );
