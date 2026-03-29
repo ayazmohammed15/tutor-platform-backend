@@ -46,18 +46,28 @@ const createSessionRequest = async (req, res, next) => {
     if (dayBlocks.length === 0) return res.status(400).json({ success: false, message: 'Tutor does not work on this day' });
 
     let validSlots = [];
-    dayBlocks.forEach(block => {
-      let current = String(block.start_time).slice(0, 5);
-      const end = String(block.end_time).slice(0, 5);
-      const duration = block.slot_duration;
-      while (current < end) {
-        const [h, m] = current.split(':').map(Number);
-        const nextTime = new Date(0, 0, 0, h, m + duration);
-        const nextStr = nextTime.toTimeString().slice(0, 5);
-        if (nextStr <= end) validSlots.push(current);
-        current = nextStr;
-      }
-    });
+dayBlocks.forEach(block => {
+  let current = String(block.start_time).slice(0, 5);
+  const end = String(block.end_time).slice(0, 5);
+
+  const SESSION_DURATION = block.slot_duration; // 60
+  const GAP = 15; // minutes
+
+  while (true) {
+    const [h, m] = current.split(':').map(Number);
+
+    // session end time
+    const sessionEnd = new Date(0, 0, 0, h, m + SESSION_DURATION);
+    const sessionEndStr = sessionEnd.toTimeString().slice(0, 5);
+
+    if (sessionEndStr > end) break;
+
+    validSlots.push(current);
+    // next slot = session end + gap
+    const nextStart = new Date(0, 0, 0, h, m + SESSION_DURATION + GAP);
+    current = nextStart.toTimeString().slice(0, 5);
+  }
+});
 
     if (!validSlots.includes(requested_time)) return res.status(400).json({ success: false, message: 'Invalid time slot selected' });
 
