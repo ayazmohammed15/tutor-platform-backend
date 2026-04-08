@@ -36,7 +36,8 @@ const createOrder = async (req, res, next) => {
           data: {
             orderId: existingPayment.razorpay_order_id,
             amount: existingPayment.amount,
-            currency: 'INR'
+            currency: 'INR',
+            keyId: process.env.RAZORPAY_KEY_ID
           }
         });
       }
