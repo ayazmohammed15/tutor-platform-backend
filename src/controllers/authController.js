@@ -82,11 +82,9 @@ const register = async (req, res, next) => {
     // TRIGGER STUDENT WELCOME EMAIL HERE
     // ==========================================
     if (user.role === 'student') {
-      try {
-        await emailService.sendWelcomeEmail(user);
-      } catch (emailError) {
-        console.error("Non-fatal error: Failed to send welcome email:", emailError);
-      }
+      emailService.sendWelcomeEmail(user)
+        .then(() => console.log("Welcome email queued"))
+        .catch(emailError => console.error("Non-fatal error: Failed to send welcome email:", emailError));
     }
     // ==========================================
 

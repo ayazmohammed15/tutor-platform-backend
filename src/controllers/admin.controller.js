@@ -46,16 +46,18 @@ console.log("Email value:", email);
 console.log("Email value:", email);
 console.log("Registration Link:", registrationLink);
     // 5️⃣ Send Email
-    await sendEmail(
-  email,
-  "Tutor Registration Invite",
-  `
-    <h3>Hello ${full_name},</h3>
-    <p>You have been invited to register as a tutor.</p>
-    <a href="${registrationLink}">${registrationLink}</a>
-    <p>This link expires in 24 hours.</p>
-  `
-);
+    sendEmail(
+      email,
+      "Tutor Registration Invite",
+      `
+        <h3>Hello ${full_name},</h3>
+        <p>You have been invited to register as a tutor.</p>
+        <a href="${registrationLink}">${registrationLink}</a>
+        <p>This link expires in 24 hours.</p>
+      `
+    )
+      .then(() => console.log("Tutor invite email queued"))
+      .catch(emailError => console.error("Non-fatal: Failed to send tutor invite email:", emailError));
 
 
     res.status(200).json({

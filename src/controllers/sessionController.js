@@ -214,7 +214,9 @@ FOR UPDATE`,
         // Add class_name & topic_name here if you pull them from the DB
       };
 
-      await emailService.sendSessionRequestEmail(emailTutorData, emailSessionData);
+      emailService.sendSessionRequestEmail(emailTutorData, emailSessionData)
+        .then(() => console.log("Tutor request email queued"))
+        .catch(emailError => console.error("Non-fatal: Failed to send request email to tutor:", emailError));
     } catch (emailError) {
       console.error("Non-fatal: Failed to send request email to tutor:", emailError);
     }
@@ -362,7 +364,9 @@ const acceptRequest = async (req, res, next) => {
         duration_minutes: session.duration_minutes
       };
 
-      await emailService.sendRequestAcceptedEmail(emailStudentData, emailSessionData);
+      emailService.sendRequestAcceptedEmail(emailStudentData, emailSessionData)
+        .then(() => console.log("Accepted email queued"))
+        .catch(emailError => console.error("Non-fatal: Failed to send accepted email:", emailError));
     } catch (emailError) {
       console.error("Non-fatal: Failed to send accepted email:", emailError);
     }
@@ -402,7 +406,9 @@ const rejectRequest = async (req, res, next) => {
         first_name: `${student.first_name} ${student.last_name}`
       };
 
-      await emailService.sendRequestRejectedEmail(emailStudentData, sessionRequest);
+      emailService.sendRequestRejectedEmail(emailStudentData, sessionRequest)
+        .then(() => console.log("Rejected email queued"))
+        .catch(emailError => console.error("Non-fatal: Failed to send rejected email:", emailError));
     } catch (emailError) {
       console.error("Non-fatal: Failed to send rejected email:", emailError);
     }
@@ -440,7 +446,9 @@ const suggestAlternateDate = async (req, res, next) => {
         first_name: `${student.first_name} ${student.last_name}`
       };
 
-      await emailService.sendAlternateDateEmail(emailStudentData, updatedRequest);
+      emailService.sendAlternateDateEmail(emailStudentData, updatedRequest)
+        .then(() => console.log("Alternate date email queued"))
+        .catch(emailError => console.error("Non-fatal: Failed to send alternate date email:", emailError));
     } catch (emailError) {
       console.error("Non-fatal: Failed to send alternate date email:", emailError);
     }

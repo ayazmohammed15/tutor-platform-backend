@@ -147,8 +147,13 @@ const verifyPayment = async (req, res, next) => {
       const student = await User.findById(session.student_id);
       const tutor = await User.findById(session.tutor_id);
 
-      await emailService.sendPaymentSuccessEmail(student, updatedSession);
-      await emailService.sendSessionConfirmationEmail(tutor, updatedSession);
+      emailService.sendPaymentSuccessEmail(student, updatedSession)
+        .then(() => console.log("Payment success email queued"))
+        .catch(emailError => console.error("Non-fatal: Failed to send payment success email:", emailError));
+
+      emailService.sendSessionConfirmationEmail(tutor, updatedSession)
+        .then(() => console.log("Session confirmation email queued"))
+        .catch(emailError => console.error("Non-fatal: Failed to send session confirmation email:", emailError));
 
       res.json({ success: true, message: 'Payment successful', data: updatedSession });
 

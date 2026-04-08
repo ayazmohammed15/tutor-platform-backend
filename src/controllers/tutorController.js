@@ -213,7 +213,7 @@ const approveTutor = async (req, res, next) => {
     console.log("RESET LINK:155", resetLink);
     console.log("EMAIL:156", tutor.email);
 
-    await sendEmail(
+    sendEmail(
       tutor.email,
       "Your Tutor Account Has Been Approved 🎉",
       `
@@ -223,7 +223,9 @@ const approveTutor = async (req, res, next) => {
         <a href="${resetLink}">${resetLink}</a>
         <p>This link expires in 24 hours.</p>
       `
-    );
+    )
+      .then(() => console.log("Tutor approval email queued"))
+      .catch(emailError => console.error("Non-fatal: Failed to send tutor approval email:", emailError));
 
     res.status(200).json({
       success: true,
@@ -257,7 +259,9 @@ const rejectTutor = async (req, res, next) => {
     }
 
     const tutor = await User.findById(tutorId);
-    await emailService.sendTutorApprovalEmail(tutor, 'rejected');
+    emailService.sendTutorApprovalEmail(tutor, 'rejected')
+      .then(() => console.log("Tutor rejection email queued"))
+      .catch(emailError => console.error("Non-fatal: Failed to send tutor rejection email:", emailError));
 
     res.status(200).json({
       success: true,
