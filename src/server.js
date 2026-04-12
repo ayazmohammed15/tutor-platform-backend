@@ -15,6 +15,8 @@ const sessionRoutes = require('./routes/sessionRoutes');
 const adminRoutes = require('./routes/admin.routes');
 const boardRoutes = require('./routes/boardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const googleAuthRoutes = require('./routes/googleAuth');
+
 
 const app = express();
 
@@ -55,6 +57,7 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', boardRoutes);
+app.use("/auth", googleAuthRoutes);
 
 
 

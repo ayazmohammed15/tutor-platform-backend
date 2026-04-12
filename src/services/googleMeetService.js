@@ -1,0 +1,71 @@
+const { google } = require("googleapis");
+const { pool } = require("../config/database");
+
+const createMeetLink = async (tutor_id, session) => {
+    const [rows] = await pool.query(
+        "SELECT * FROM tutor_google_tokens WHERE tutor_id = ?",
+        [tutor_id]
+    );
+
+    const token = rows[0];
+
+    const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+
+    oauth2Client.setCredentials({
+        access_token: token.access_token,
+        refresh_token: token.refresh_token,
+    });
+
+    const calendar = google.calendar({
+        version: "v3",
+        auth: oauth2Client,
+    });
+    console.log("SESSION DETAILS:", session);
+    console.log("DATE:", session.scheduled_date);
+    console.log("TIME:", session.scheduled_time);
+
+    const date = new Date(session.scheduled_date);
+
+    // extract only date part (YYYY-MM-DD)
+    const datePart = date.toISOString().split("T")[0];
+
+    // combine properly
+    const startTime = new Date(`${datePart}T${session.scheduled_time}`);
+
+    if (isNaN(startTime)) {
+        throw new Error("Invalid date/time from session");
+    }
+
+    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+
+    const event = {
+        summary: "Tutoring Session",
+        start: {
+            dateTime: startTime.toISOString(),
+            timeZone: "Asia/Kolkata",
+        },
+        end: {
+            dateTime: endTime.toISOString(),
+            timeZone: "Asia/Kolkata",
+        },
+        conferenceData: {
+            createRequest: {
+                requestId: "meet-" + Date.now(),
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+        },
+    };
+
+    const response = await calendar.events.insert({
+        calendarId: "primary",
+        resource: event,
+        conferenceDataVersion: 1,
+    });
+
+    return response.data.hangoutLink;
+};
+
+module.exports = { createMeetLink };

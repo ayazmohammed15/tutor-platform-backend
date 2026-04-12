@@ -2,7 +2,9 @@ const Payment = require('../models/Payment');
 const Session = require('../models/Session');
 const TutorProfile = require('../models/TutorProfile');
 const razorpayService = require('../services/razorpayService');
-const zoomService = require('../services/zoomService');
+// const zoomService = require('../services/zoomService');
+const googleMeetService = require('../services/googleMeetService');
+const { pool } = require('../config/database');
 const emailService = require('../services/emailService');
 const User = require('../models/User');
 
@@ -119,30 +121,16 @@ const verifyPayment = async (req, res, next) => {
 
     const session = await Session.findById(payment.session_id);
     try {
-      let zoomMeeting;
+      const meetLink = await googleMeetService.createMeetLink(
+        session.tutor_id,
+        session
+      );
 
-      if (process.env.ZOOM_MODE === 'mock') {
-        // 🔥 Dummy Zoom
-        zoomMeeting = {
-          join_url: "https://zoom.us/j/123456789?pwd=test123",
-          meeting_id: "123456789",
-          password: "test123"
-        };
-      } else {
-        // 🔥 Real Zoom (later)
-        zoomMeeting = await zoomService.createMeeting({
-          topic: 'Tutoring Session',
-          scheduled_date: session.scheduled_date,
-          scheduled_time: session.scheduled_time,
-          duration_minutes: session.duration_minutes
-        });
-      }
-
-      await Session.addZoomDetails(payment.session_id, {
-        zoom_meeting_link: zoomMeeting.join_url,
-        zoom_meeting_id: zoomMeeting.meeting_id.toString(),
-        zoom_password: zoomMeeting.password
-      });
+      // save meet link
+      await pool.query(
+        "UPDATE sessions SET zoom_meeting_link = ? WHERE id = ?",
+        [meetLink, payment.session_id]
+      );
 
       const updatedSession = await Session.findById(payment.session_id);
       const student = await User.findById(session.student_id);
