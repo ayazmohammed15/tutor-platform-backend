@@ -8,9 +8,12 @@ const { pool } = require('../config/database');
 const emailService = require('../services/emailService');
 const User = require('../models/User');
 
+const getPaymentMethod = (payload = {}) => payload.payment_method || payload.paymentMethod || null;
+
 const createOrder = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
+    const paymentMethod = getPaymentMethod(req.body);
 
     const session = await Session.findById(sessionId);
     if (!session) {
@@ -33,6 +36,10 @@ const createOrder = async (req, res, next) => {
       }
 
       if (existingPayment.status === 'pending') {
+        if (paymentMethod && existingPayment.payment_method !== paymentMethod) {
+          await Payment.updatePaymentMethod(existingPayment.razorpay_order_id, paymentMethod);
+        }
+
         return res.json({
           success: true,
           data: {
@@ -65,7 +72,8 @@ const createOrder = async (req, res, next) => {
       student_id: req.user.id,
       amount,
       currency: 'INR',
-      razorpay_order_id: order.id
+      razorpay_order_id: order.id,
+      payment_method: paymentMethod
     });
 
     res.json({
@@ -85,7 +93,12 @@ const createOrder = async (req, res, next) => {
 
 const verifyPayment = async (req, res, next) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    } = req.body;
+    const paymentMethod = getPaymentMethod(req.body);
 
     let isValid = true;
 
@@ -114,7 +127,8 @@ const verifyPayment = async (req, res, next) => {
     await Payment.updatePaymentStatus(razorpay_order_id, {
       razorpay_payment_id,
       razorpay_signature,
-      status: 'completed'
+      status: 'completed',
+      payment_method: paymentMethod
     });
 
     await Session.updateStatus(payment.session_id, 'paid');

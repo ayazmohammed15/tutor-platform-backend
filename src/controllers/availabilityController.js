@@ -33,11 +33,20 @@ const createSlot = async (req, res, next) => {
 
 const getMySlots = async (req, res, next) => {
   try {
-    const slots = await AvailabilitySlot.findByTutorId(req.user.id);
+    const tutorId = req.user.id;
+    const slots = await AvailabilitySlot.findByTutorId(tutorId);
+    const range = await AvailabilitySlot.getRange(tutorId);
 
     res.status(200).json({
       success: true,
-      data: { slots, count: slots.length }
+      data: {
+        slots,
+        count: slots.length,
+        availability_range: range ? {
+          start_date: range.start_date,
+          end_date: range.end_date
+        } : null
+      }
     });
   } catch (error) {
     next(error);
@@ -49,10 +58,20 @@ const getTutorSlots = async (req, res, next) => {
     const { tutorId } = req.params;
 
     const slots = await AvailabilitySlot.findByTutorId(tutorId);
+    const range = await AvailabilitySlot.getRange(tutorId); // ✅ ADD THIS
 
     res.status(200).json({
       success: true,
-      data: { slots, count: slots.length }
+      data: {
+        slots,
+        count: slots.length,
+        availability_range: range
+          ? {
+              start_date: range.start_date,
+              end_date: range.end_date
+            }
+          : null
+      }
     });
   } catch (error) {
     next(error);

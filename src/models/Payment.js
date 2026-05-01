@@ -2,11 +2,18 @@ const { pool } = require('../config/database');
 
 class Payment {
   static async create(paymentData) {
-    const { session_id, student_id, amount, currency, razorpay_order_id } = paymentData;
+    const {
+      session_id,
+      student_id,
+      amount,
+      currency,
+      razorpay_order_id,
+      payment_method = null
+    } = paymentData;
 
     const [result] = await pool.query(
-      'INSERT INTO payments (session_id, student_id, amount, currency, razorpay_order_id) VALUES (?, ?, ?, ?, ?)',
-      [session_id, student_id, amount, currency, razorpay_order_id]
+      'INSERT INTO payments (session_id, student_id, amount, currency, razorpay_order_id, payment_method) VALUES (?, ?, ?, ?, ?, ?)',
+      [session_id, student_id, amount, currency, razorpay_order_id, payment_method]
     );
 
     return result.insertId;
@@ -29,11 +36,25 @@ class Payment {
   }
 
   static async updatePaymentStatus(orderId, paymentData) {
-    const { razorpay_payment_id, razorpay_signature, status } = paymentData;
+    const {
+      razorpay_payment_id,
+      razorpay_signature,
+      status,
+      payment_method = null
+    } = paymentData;
 
     const [result] = await pool.query(
-      'UPDATE payments SET razorpay_payment_id = ?, razorpay_signature = ?, status = ? WHERE razorpay_order_id = ?',
-      [razorpay_payment_id, razorpay_signature, status, orderId]
+      'UPDATE payments SET razorpay_payment_id = ?, razorpay_signature = ?, status = ?, payment_method = COALESCE(?, payment_method) WHERE razorpay_order_id = ?',
+      [razorpay_payment_id, razorpay_signature, status, payment_method, orderId]
+    );
+
+    return result.affectedRows > 0;
+  }
+
+  static async updatePaymentMethod(orderId, paymentMethod) {
+    const [result] = await pool.query(
+      'UPDATE payments SET payment_method = ? WHERE razorpay_order_id = ?',
+      [paymentMethod, orderId]
     );
 
     return result.affectedRows > 0;
