@@ -33,20 +33,11 @@ const createSlot = async (req, res, next) => {
 
 const getMySlots = async (req, res, next) => {
   try {
-    const tutorId = req.user.id;
-    const slots = await AvailabilitySlot.findByTutorId(tutorId);
-    const range = await AvailabilitySlot.getRange(tutorId);
+    const slots = await AvailabilitySlot.findByTutorId(req.user.id);
 
     res.status(200).json({
       success: true,
-      data: {
-        slots,
-        count: slots.length,
-        availability_range: range ? {
-          start_date: range.start_date,
-          end_date: range.end_date
-        } : null
-      }
+      data: { slots, count: slots.length }
     });
   } catch (error) {
     next(error);
@@ -58,20 +49,10 @@ const getTutorSlots = async (req, res, next) => {
     const { tutorId } = req.params;
 
     const slots = await AvailabilitySlot.findByTutorId(tutorId);
-    const range = await AvailabilitySlot.getRange(tutorId); // ✅ ADD THIS
 
     res.status(200).json({
       success: true,
-      data: {
-        slots,
-        count: slots.length,
-        availability_range: range
-          ? {
-              start_date: range.start_date,
-              end_date: range.end_date
-            }
-          : null
-      }
+      data: { slots, count: slots.length }
     });
   } catch (error) {
     next(error);
@@ -209,9 +190,17 @@ const saveAvailability = async (req, res, next) => {
     const tutorId = req.user.id;
     const { start_date, end_date, weekly_schedule, excluded_dates } = req.body;
 
-    await AvailabilitySlot.deleteAllByTutor(tutorId);
-    await AvailabilitySlot.deleteExcludedByTutor(tutorId);
+    // ✅ STEP 1: check existing availability
+    const existingRange = await AvailabilitySlot.getRange(tutorId);
 
+    if (existingRange) {
+      return res.status(400).json({
+        success: false,
+        message: "Availability already exists. Please edit instead."
+      });
+    }
+
+    // ✅ STEP 2: save new data (first time only)
     await AvailabilitySlot.saveRange(tutorId, start_date, end_date);
 
     for (const day of weekly_schedule) {
@@ -237,6 +226,67 @@ const saveAvailability = async (req, res, next) => {
 
   } catch (error) {
     next(error);
+  }
+};
+
+const updateAvailability = async (req, res, next) => {
+  try {
+    const tutorId = req.user.id;
+    const { start_date, end_date, weekly_schedule, excluded_dates } = req.body;
+
+    // ✅ overwrite existing
+    await AvailabilitySlot.deleteAllByTutor(tutorId);
+    await AvailabilitySlot.deleteExcludedByTutor(tutorId);
+
+    await pool.query(
+      'UPDATE tutor_availability_range SET start_date = ?, end_date = ? WHERE tutor_id = ?',
+      [start_date, end_date, tutorId]
+    );
+
+    for (const day of weekly_schedule) {
+      for (const block of day.blocks) {
+        await AvailabilitySlot.create({
+          tutor_id: tutorId,
+          day_of_week: day.day,
+          start_time: block.start_time,
+          end_time: block.end_time,
+          slot_duration: block.slot_duration
+        });
+      }
+    }
+
+    for (const date of excluded_dates) {
+      await AvailabilitySlot.addExcludedDate(tutorId, date);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Availability updated successfully'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMyAvailability = async (req, res) => {
+  try {
+    const tutorId = req.user.id;
+
+    const range = await AvailabilitySlot.getRange(tutorId);
+    const slots = await AvailabilitySlot.findByTutorId(tutorId);
+    const excluded = await AvailabilitySlot.getExcludedDates(tutorId);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        range,
+        slots,
+        excluded
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -388,5 +438,7 @@ module.exports = {
   getAvailableSlotsByDate,
   updateSlot,
   deleteSlot,
-  saveAvailability
+  saveAvailability,
+  updateAvailability,
+  getMyAvailability
 };
