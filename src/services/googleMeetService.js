@@ -3,11 +3,19 @@ const { pool } = require("../config/database");
 
 const createMeetLink = async (tutor_id, session) => {
     const [rows] = await pool.query(
-        "SELECT * FROM tutor_google_tokens WHERE tutor_id = ?",
+        "SELECT access_token, refresh_token FROM tutor_google_tokens WHERE tutor_id = ?",
         [tutor_id]
     );
 
+    if (!rows || rows.length === 0) {
+        throw new Error(`Tutor ${tutor_id} has not connected Google Calendar.`);
+    }
+
     const token = rows[0];
+
+    if (!token || !token.access_token) {
+        throw new Error("Invalid Google tokens found for tutor.");
+    }
 
     const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
@@ -38,16 +46,13 @@ const createMeetLink = async (tutor_id, session) => {
         version: "v3",
         auth: oauth2Client,
     });
+
     console.log("SESSION DETAILS:", session);
     console.log("DATE:", session.scheduled_date);
     console.log("TIME:", session.scheduled_time);
 
     const date = new Date(session.scheduled_date);
-
-    // extract only date part (YYYY-MM-DD)
     const datePart = date.toISOString().split("T")[0];
-
-    // combine properly
     const startTime = new Date(`${datePart}T${session.scheduled_time}`);
 
     if (isNaN(startTime)) {
@@ -66,6 +71,10 @@ const createMeetLink = async (tutor_id, session) => {
             dateTime: endTime.toISOString(),
             timeZone: "Asia/Kolkata",
         },
+        attendees: [
+    { email: session.student_email },
+    { email: session.tutor_email } // optional but good
+  ],
         conferenceData: {
             createRequest: {
                 requestId: "meet-" + Date.now(),

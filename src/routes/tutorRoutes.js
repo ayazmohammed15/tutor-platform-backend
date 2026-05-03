@@ -7,6 +7,7 @@ const validate = require('../middleware/validate');
 
 router.post('/profile', authenticate, authorize('tutor'), tutorProfileValidator, validate, tutorController.createProfile);
 router.get('/profile/me', authenticate, authorize('tutor'), tutorController.getMyProfile);
+router.get('/google-status', authenticate, authorize('tutor'), tutorController.getGoogleConnectionStatus);
 router.put('/profile', authenticate, authorize('tutor'), tutorProfileValidator, validate, tutorController.updateProfile);
 
 router.get('/status/:status', authenticate, authorize('admin'), tutorController.getTutorsByStatus);

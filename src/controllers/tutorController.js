@@ -347,6 +347,29 @@ const getTutorDetails = async (req, res, next) => {
   }
 };
 
+const getGoogleConnectionStatus = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'tutor') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Only tutors can check Google status' 
+      });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT tutor_id FROM tutor_google_tokens WHERE tutor_id = ?',
+      [req.user.id]
+    );
+
+    res.json({
+      success: true,
+      isConnected: rows && rows.length > 0
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createProfile,
   getMyProfile,
@@ -355,5 +378,6 @@ module.exports = {
   approveTutor,
   rejectTutor,
   searchTutors,
-  getTutorDetails
+  getTutorDetails,
+  getGoogleConnectionStatus
 };

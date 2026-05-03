@@ -161,13 +161,16 @@ const verifyPayment = async (req, res, next) => {
       res.json({ success: true, message: 'Payment successful', data: updatedSession });
 
     } catch (err) {
-      console.error("Zoom Error:", err);
+      console.error("Google Meet error:", err);
 
       const updatedSession = await Session.findById(payment.session_id);
+      const message = err.message.includes('Google Calendar')
+        ? 'Payment successful, but tutor has not connected Google Calendar yet.'
+        : 'Payment successful (Google Meet could not be created).';
 
       res.json({
         success: true,
-        message: 'Payment successful (Zoom will be added soon)',
+        message,
         data: updatedSession
       });
     }

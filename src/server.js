@@ -57,7 +57,7 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', boardRoutes);
-app.use("/auth", googleAuthRoutes);
+app.use("/api/auth", googleAuthRoutes);
 
 
 
