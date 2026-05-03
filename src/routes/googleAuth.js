@@ -13,6 +13,7 @@ const oauth2Client = new google.auth.OAuth2(
 router.get("/google", (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
+    prompt: "consent",
     scope: ["https://www.googleapis.com/auth/calendar"],
   });
   res.redirect(url);
@@ -26,9 +27,13 @@ router.get("/google/callback", async (req, res) => {
 
   // ⚠️ for testing we use tutor_id = 56 (change later)
   await pool.query(
-    "INSERT INTO tutor_google_tokens (tutor_id, access_token, refresh_token) VALUES (?, ?, ?)",
-    [56, tokens.access_token, tokens.refresh_token]
-  );
+  `INSERT INTO tutor_google_tokens (tutor_id, access_token, refresh_token)
+   VALUES (?, ?, ?)
+   ON DUPLICATE KEY UPDATE
+   access_token = VALUES(access_token),
+   refresh_token = VALUES(refresh_token)`,
+  [56, tokens.access_token, tokens.refresh_token]
+);
 
   res.send("Google Connected ✅");
 });

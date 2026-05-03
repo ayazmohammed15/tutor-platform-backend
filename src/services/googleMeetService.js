@@ -19,6 +19,21 @@ const createMeetLink = async (tutor_id, session) => {
         refresh_token: token.refresh_token,
     });
 
+    oauth2Client.on("tokens", async (tokens) => {
+        console.log("UPDATED TOKENS:", tokens);
+
+        await pool.query(
+            `UPDATE tutor_google_tokens 
+         SET access_token = ?, refresh_token = COALESCE(?, refresh_token)
+         WHERE tutor_id = ?`,
+            [
+                tokens.access_token,
+                tokens.refresh_token || null,
+                tutor_id
+            ]
+        );
+    });
+
     const calendar = google.calendar({
         version: "v3",
         auth: oauth2Client,
