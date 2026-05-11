@@ -59,37 +59,37 @@ const getTutorSlots = async (req, res, next) => {
   }
 };
 
-const updateSlot = async (req, res, next) => {
-  try {
-    const { slotId } = req.params;
-    const { day_of_week, start_time, end_time, is_available } = req.body;
+// const updateSlot = async (req, res, next) => {
+//   try {
+//     const { slotId } = req.params;
+//     const { day_of_week, start_time, end_time, is_available } = req.body;
 
-    const updates = {};
-    if (day_of_week !== undefined) updates.day_of_week = day_of_week;
-    if (start_time !== undefined) updates.start_time = start_time;
-    if (end_time !== undefined) updates.end_time = end_time;
-    if (is_available !== undefined) updates.is_available = is_available;
+//     const updates = {};
+//     if (day_of_week !== undefined) updates.day_of_week = day_of_week;
+//     if (start_time !== undefined) updates.start_time = start_time;
+//     if (end_time !== undefined) updates.end_time = end_time;
+//     if (is_available !== undefined) updates.is_available = is_available;
 
-    const updated = await AvailabilitySlot.update(slotId, req.user.id, updates);
+//     const updated = await AvailabilitySlot.update(slotId, req.user.id, updates);
 
-    if (!updated) {
-      return res.status(404).json({
-        success: false,
-        message: 'Slot not found or no changes made'
-      });
-    }
+//     if (!updated) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Slot not found or no changes made'
+//       });
+//     }
 
-    const slot = await AvailabilitySlot.findById(slotId);
+//     const slot = await AvailabilitySlot.findById(slotId);
 
-    res.status(200).json({
-      success: true,
-      message: 'Availability slot updated successfully',
-      data: { slot }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       message: 'Availability slot updated successfully',
+//       data: { slot }
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// };
 
 const deleteSlot = async (req, res, next) => {
   try {
@@ -238,10 +238,22 @@ const updateAvailability = async (req, res, next) => {
     await AvailabilitySlot.deleteAllByTutor(tutorId);
     await AvailabilitySlot.deleteExcludedByTutor(tutorId);
 
-    await pool.query(
-      'UPDATE tutor_availability_range SET start_date = ?, end_date = ? WHERE tutor_id = ?',
-      [start_date, end_date, tutorId]
+    const [existing] = await pool.query(
+      'SELECT id FROM tutor_availability_range WHERE tutor_id = ?',
+      [tutorId]
     );
+
+    if (existing.length > 0) {
+      await pool.query(
+        'UPDATE tutor_availability_range SET start_date = ?, end_date = ? WHERE tutor_id = ?',
+        [start_date, end_date, tutorId]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO tutor_availability_range (tutor_id, start_date, end_date) VALUES (?, ?, ?)',
+        [tutorId, start_date, end_date]
+      );
+    }
 
     for (const day of weekly_schedule) {
       for (const block of day.blocks) {
@@ -436,7 +448,7 @@ module.exports = {
   getTutorSlots,
   getAvailableSlots,
   getAvailableSlotsByDate,
-  updateSlot,
+  // updateSlot,
   deleteSlot,
   saveAvailability,
   updateAvailability,

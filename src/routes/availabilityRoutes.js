@@ -11,7 +11,7 @@ router.post('/save', authenticate, authorize('tutor'), availabilityController.sa
 router.post('/', authenticate, authorize('tutor'), availabilitySlotValidator, validate, availabilityController.createSlot);
 router.get('/my-slots', authenticate, authorize('tutor'), availabilityController.getMySlots);
 router.get('/tutor/:tutorId', authenticate, availabilityController.getTutorSlots);
-router.put('/:slotId', authenticate, authorize('tutor'), availabilityController.updateSlot);
+// router.put('/:slotId', authenticate, authorize('tutor'), availabilityController.updateSlot);
 router.delete('/:slotId', authenticate, authorize('tutor'), availabilityController.deleteSlot);
 router.put('/update', authenticate, authorize('tutor'), availabilityController.updateAvailability);
 router.get('/my', authenticate, authorize('tutor'), availabilityController.getMyAvailability);
