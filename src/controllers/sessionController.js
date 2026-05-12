@@ -13,11 +13,9 @@ const createSessionRequest = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Only students can create session requests' });
     }
 
-    let { tutor_id, subject_id,class_id,course_id, requested_date, requested_time, notes } = req.body;
+    let { tutor_id, subject_id, requested_date, requested_time, notes } = req.body;
     tutor_id = parseInt(tutor_id, 10);
     subject_id = subject_id !== undefined && subject_id !== null && subject_id !== '' ? parseInt(subject_id, 10) : null;
-    class_id = class_id !== undefined && class_id !== null && class_id !== '' ? parseInt(class_id, 10) : null;
-    course_id = course_id !== undefined && course_id !== null && course_id !== '' ? parseInt(course_id, 10) : null;
     requested_time = String(requested_time).slice(0, 5);
     const requestedDateOnly = requested_date.split('T')[0];
     const reqDate = new Date(requestedDateOnly);
@@ -28,6 +26,52 @@ const createSessionRequest = async (req, res, next) => {
 
     const tutor = await User.findById(tutor_id);
     if (!tutor || tutor.role !== 'tutor') return res.status(404).json({ success: false, message: 'Tutor not found' });
+
+    const student = await User.findById(req.user.id);
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+
+    const course_id = student.course_id ? parseInt(student.course_id, 10) : null;
+    const class_id = student.class_id ? parseInt(student.class_id, 10) : null;
+
+    if (!course_id) {
+      return res.status(400).json({ success: false, message: 'Student course is not configured' });
+    }
+
+    if (subject_id !== null) {
+      const [studentSubjects] = await connection.query(
+        `SELECT 1
+         FROM student_subjects
+         WHERE student_id = ? AND subject_id = ?
+         LIMIT 1`,
+        [req.user.id, subject_id]
+      );
+
+      if (studentSubjects.length === 0) {
+        return res.status(400).json({ success: false, message: 'Selected subject is not linked to your account' });
+      }
+    }
+
+    const [tutorEligibility] = await connection.query(
+      `SELECT tp.id
+       FROM tutor_profiles tp
+       JOIN tutor_courses tc ON tc.tutor_profile_id = tp.id
+       LEFT JOIN tutor_classes tcl ON tcl.tutor_profile_id = tp.id
+       WHERE tp.user_id = ?
+         AND tp.is_approved = 1
+         AND tp.approval_status = 'approved'
+         AND tc.course_id = ?
+         AND (? IS NULL OR tcl.class_id = ?)
+         AND (? IS NULL OR tp.subject_id = ?)
+       LIMIT 1`,
+      [tutor_id, course_id, class_id, class_id, subject_id, subject_id]
+    );
+
+    if (tutorEligibility.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This tutor is not available for your course, class, or subject'
+      });
+    }
 
     const range = await AvailabilitySlot.getRange(tutor_id);
     if (!range) return res.status(400).json({ success: false, message: 'Tutor has no availability set' });
@@ -200,8 +244,6 @@ FOR UPDATE`,
     // 📧 1. EMAIL TRIGGER: NEW REQUEST TO TUTOR
     // ==========================================
     try {
-      const student = await User.findById(req.user.id); // Fetch student details for the email
-
       const emailTutorData = {
         email: tutor.email,
         first_name: `${tutor.first_name} ${tutor.last_name}`

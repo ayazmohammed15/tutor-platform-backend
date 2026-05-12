@@ -1,6 +1,17 @@
 const { body } = require('express-validator');
+const GENERAL_COURSE_SLUGS = [
+  'school-tuition',
+  'cbse-school-tuition'
+];
+
+const ENGINEERING_COURSE_SLUGS = [
+  'iit-jee',
+  'neet',
+  'foundation-iit-jee'
+];
 
 const registerValidator = [
+
   body('email')
     .isEmail()
     .withMessage('Please provide a valid email')
@@ -28,6 +39,60 @@ const registerValidator = [
     .optional()
     .isLength({ min: 10, max: 15 })
     .withMessage('Phone number must be valid'),
+
+  // COURSE VALIDATION
+  body('course')
+    .notEmpty()
+    .withMessage('Course is required')
+    .custom((value) => {
+
+      const validCourses = [
+        ...GENERAL_COURSE_SLUGS,
+        ...ENGINEERING_COURSE_SLUGS
+      ];
+
+      if (!validCourses.includes(value)) {
+        throw new Error('Invalid course selected');
+      }
+
+      return true;
+    }),
+
+  // CATEGORY VALIDATION
+  body('student_category')
+    .optional()
+    .isIn(['general', 'engineering'])
+    .withMessage('Invalid student category'),
+
+  // CLASS VALIDATION
+  body('class_id')
+    .optional()
+    .custom((value, { req }) => {
+
+      // School/CBSE students require class
+      if (
+        GENERAL_COURSE_SLUGS.includes(req.body.course)
+      ) {
+
+        if (!value) {
+          throw new Error('Class is required');
+        }
+
+        const classNum = Number(value);
+
+        if (!Number.isInteger(classNum) || classNum < 1) {
+          throw new Error('Invalid class selected');
+        }
+      }
+
+      return true;
+    }),
+
+  // SUBJECTS VALIDATION
+  body('subjects')
+    .isArray({ min: 1 })
+    .withMessage('Please select at least one subject')
+
 ];
 
 

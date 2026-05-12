@@ -67,23 +67,23 @@ const getMyProfile = async (req, res, next) => {
 const updateProfile = async (req, res, next) => {
   try {
     // UPDATED: Destructure the new fields matching your React state
-    const { 
-      bio, 
-      education, 
-      experience_years, 
-      hourly_rate, 
-      subject_id, 
-      demo_link, 
-      teaching_mode 
+    const {
+      bio,
+      education,
+      experience_years,
+      hourly_rate,
+      subject_id,
+      demo_link,
+      teaching_mode
     } = req.body;
-    
+
     const updates = {};
 
     if (bio !== undefined) updates.bio = bio;
     if (education !== undefined) updates.education = education;
     if (experience_years !== undefined) updates.experience_years = experience_years;
     if (hourly_rate !== undefined) updates.hourly_rate = hourly_rate;
-    
+
     // UPDATED: Added new fields to the update object
     if (subject_id !== undefined) updates.subject_id = subject_id;
     if (demo_link !== undefined) updates.demo_link = demo_link;
@@ -276,8 +276,14 @@ const searchTutors = async (req, res, next) => {
   try {
     const { course_id, class_id, subject_id } = req.query;
     const student = await User.findById(req.user.id);
-    const effectiveCourseId = course_id ? parseInt(course_id, 10) : student?.course_id || null;
-    const effectiveClassId = class_id ? parseInt(class_id, 10) : student?.class_id || null;
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found"
+      });
+    }
+    const effectiveCourseId = student.course_id;
+    const effectiveClassId = student?.class_id || null;
 
     let subjectIds = [];
 
@@ -350,9 +356,9 @@ const getTutorDetails = async (req, res, next) => {
 const getGoogleConnectionStatus = async (req, res, next) => {
   try {
     if (req.user.role !== 'tutor') {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Only tutors can check Google status' 
+      return res.status(403).json({
+        success: false,
+        message: 'Only tutors can check Google status'
       });
     }
 

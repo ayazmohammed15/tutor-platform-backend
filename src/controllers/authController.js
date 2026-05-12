@@ -4,105 +4,195 @@ const { generateToken } = require('../utils/jwt');
 const emailService = require('../services/emailService');
 const { pool } = require('../config/database');
 
+const GENERAL_COURSE_SLUGS = [
+  "school-tuition",
+  "cbse-school-tuition"
+];
 
-const register = async (req, res, next) => {
+const ENGINEERING_COURSE_SLUGS = [
+  "iit-jee",
+  "neet",
+  "foundation-iit-jee"
+];
+
+const getStudentCategoryFromCourse = (course) => {
+  if (GENERAL_COURSE_SLUGS.includes(course)) {
+    return "general";
+  }
+
+  if (ENGINEERING_COURSE_SLUGS.includes(course)) {
+    return "engineering";
+  }
+
+  return null;
+};
+
+const createStudentAccount = async ({
+  email,
+  password,
+  first_name,
+  last_name,
+  phone,
+  course,
+  class_id,
+  subjects,
+  student_category
+}) => {
+
+  // Basic validation
+  if (!email || !password) {
+    throw new Error("Email and password are required");
+  }
+
+  // Subject validation
+  if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
+    throw new Error("Please select at least one subject");
+  }
+
+  // Existing email validation
+  const existingUser = await User.findByEmail(email);
+
+  if (existingUser) {
+    throw new Error("Email already registered");
+  }
+
+  // GENERAL VALIDATION
+  if (student_category === "general") {
+
+    if (!GENERAL_COURSE_SLUGS.includes(course)) {
+      throw new Error("Invalid general tuition course");
+    }
+
+    if (!class_id) {
+      throw new Error("Class is required");
+    }
+  }
+
+  // ENGINEERING VALIDATION
+  if (student_category === "engineering") {
+
+    if (!ENGINEERING_COURSE_SLUGS.includes(course)) {
+      throw new Error("Invalid engineering course");
+    }
+  }
+
+  // Create user
+  const userId = await User.create({
+    email,
+    password,
+    first_name,
+    last_name,
+    phone,
+    role: "student",
+    course,
+    class_id,
+    student_category
+  });
+
+  // Insert subjects
+  const subjectValues = subjects.map(subjectId => [
+    userId,
+    subjectId
+  ]);
+
+  await pool.query(
+    `INSERT INTO student_subjects (student_id, subject_id) VALUES ?`,
+    [subjectValues]
+  );
+
+  // Get created user
+  const user = await User.findById(userId);
+
+  // Generate token
+  const token = generateToken({
+    userId: user.id,
+    role: user.role
+  });
+
+  // Welcome email
+  emailService.sendWelcomeEmail(user)
+    .catch(err => console.error(err));
+
+  return {
+    user,
+    token
+  };
+};
+
+const register = async (req, res) => {
+
   try {
-    // 1. Updated req.body: removed board_id, replaced subject_id with subjects array
-    const {
-      email,
-      password,
-      first_name,
-      last_name,
-      phone,
-      course,
-      class_id,
-      subjects // This is now an array of IDs from your React frontend
-    } = req.body;
 
-
-    console.log(req.body);
-
-    console.log("🔹 Registration attempt for:", email);
-
-    // Basic validation
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required"
-      });
-    }
-
-    // Validate subjects array
-    if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Please select at least one subject."
-      });
-    }
-
-    // Check if email already exists
-    const existingUser = await User.findByEmail(email);
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "Email already registered"
-      });
-    }
-
-    // 2. Create User (Only Single Values go in the users table now)
-    const userId = await User.create({
-      email,
-      password,
-      first_name,
-      last_name,
-      phone,
-      role: "student",
-      course,
-      class_id
+    const result = await createStudentAccount({
+      ...req.body,
+      student_category: req.body.student_category || getStudentCategoryFromCourse(req.body.course)
     });
-
-    // 3. Insert into the student_subjects link table
-    // We map over the array to create bulk insert values: [[userId, sub1], [userId, sub2]]
-    const subjectValues = subjects.map(subjectId => [userId, subjectId]);
-
-    await pool.query(
-      `INSERT INTO student_subjects (student_id, subject_id) VALUES ?`,
-      [subjectValues]
-    );
-
-    // Fetch the complete user object
-    const user = await User.findById(userId);
-
-    const token = generateToken({
-      userId: user.id,
-      role: user.role
-    });
-
-    // 📧 ==========================================
-    // TRIGGER STUDENT WELCOME EMAIL HERE
-    // ==========================================
-    if (user.role === 'student') {
-      emailService.sendWelcomeEmail(user)
-        .then(() => console.log("Welcome email queued"))
-        .catch(emailError => console.error("Non-fatal error: Failed to send welcome email:", emailError));
-    }
-    // ==========================================
 
     res.status(201).json({
       success: true,
       message: "Student registration successful",
-      data: {
-        user,
-        token
-      }
+      data: result
     });
 
   } catch (error) {
-    next(error);
+
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
   }
 };
 
+const registerSchool = async (req, res) => {
 
+  try {
+
+    const result = await createStudentAccount({
+      ...req.body,
+      student_category: "general"
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "School registration successful",
+      data: result
+    });
+
+  } catch (error) {
+
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
+
+const registerEngineering = async (req, res) => {
+
+  try {
+
+    const result = await createStudentAccount({
+      ...req.body,
+      student_category: "engineering"
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Engineering registration successful",
+      data: result
+    });
+
+  } catch (error) {
+
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
 
 const login = async (req, res, next) => {
   try {
@@ -181,7 +271,8 @@ const login = async (req, res, next) => {
           course_id: user.course_id,
           board_id: user.board_id,
           class_id: user.class_id,
-          subject_id: user.subject_id
+          subject_id: user.subject_id,
+          student_category: user.student_category
         },
         token
       }
@@ -391,6 +482,8 @@ const completeRegistration = async (req, res) => {
 
 module.exports = {
   register,
+  registerSchool,
+  registerEngineering,
   login,
   getProfile,
   updateProfile,

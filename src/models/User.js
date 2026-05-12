@@ -13,6 +13,7 @@ class User {
       role,
       course, // This comes in as the slug (e.g., 'iit-jee')
       class_id,
+      student_category
     } = userData;
 
     // 1. Find the real numeric ID for the course slug
@@ -33,8 +34,8 @@ class User {
     // 3. Insert into the users table using the real numeric ID
     const [result] = await pool.query(
       `INSERT INTO users 
-      (first_name, last_name, email, password, phone, role, course_id, class_id) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (first_name, last_name, email, password, phone, role, course_id, class_id, student_category) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         first_name,
         last_name,
@@ -43,7 +44,8 @@ class User {
         phone,
         role,
         realCourseId || null, // Use the fetched integer ID here
-        class_id || null
+        class_id || null,
+        student_category || null
       ]
     );
 
@@ -70,6 +72,7 @@ class User {
       u.role,
       u.course_id,
       u.class_id,
+      u.student_category,
       GROUP_CONCAT(ss.subject_id) AS subjects
     FROM users u
     LEFT JOIN student_subjects ss 
