@@ -168,11 +168,16 @@ class TutorProfile {
               u.first_name, 
               u.last_name, 
               u.phone,
-              s.subject_name  -- ADDED THIS
+              s.subject_name,
+              GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_order) AS classes,
+              GROUP_CONCAT(DISTINCT c.id ORDER BY c.class_order) AS class_ids
        FROM tutor_profiles tp
        JOIN users u ON tp.user_id = u.id
-       LEFT JOIN subjects s ON tp.subject_id = s.id  -- ADDED THIS JOIN
-       WHERE tp.user_id = ?`,
+       LEFT JOIN subjects s ON tp.subject_id = s.id
+       LEFT JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
+       LEFT JOIN classes c ON c.id = tc.class_id
+       WHERE tp.user_id = ?
+       GROUP BY tp.id`,
       [userId]
     );
     return rows[0];
@@ -185,11 +190,16 @@ class TutorProfile {
               u.first_name, 
               u.last_name, 
               u.phone,
-              s.subject_name  -- ADDED THIS
+              s.subject_name,
+              GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_order) AS classes,
+              GROUP_CONCAT(DISTINCT c.id ORDER BY c.class_order) AS class_ids
        FROM tutor_profiles tp
        JOIN users u ON tp.user_id = u.id
-       LEFT JOIN subjects s ON tp.subject_id = s.id  -- ADDED THIS JOIN
-       WHERE tp.id = ?`,
+       LEFT JOIN subjects s ON tp.subject_id = s.id
+       LEFT JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
+       LEFT JOIN classes c ON c.id = tc.class_id
+       WHERE tp.id = ?
+       GROUP BY tp.id`,
       [id]
     );
     return rows[0];

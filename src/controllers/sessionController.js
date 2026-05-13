@@ -37,39 +37,23 @@ const createSessionRequest = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Student course is not configured' });
     }
 
-    if (subject_id !== null) {
-      const [studentSubjects] = await connection.query(
-        `SELECT 1
-         FROM student_subjects
-         WHERE student_id = ? AND subject_id = ?
-         LIMIT 1`,
-        [req.user.id, subject_id]
-      );
-
-      if (studentSubjects.length === 0) {
-        return res.status(400).json({ success: false, message: 'Selected subject is not linked to your account' });
-      }
-    }
-
     const [tutorEligibility] = await connection.query(
       `SELECT tp.id
        FROM tutor_profiles tp
        JOIN tutor_courses tc ON tc.tutor_profile_id = tp.id
-       LEFT JOIN tutor_classes tcl ON tcl.tutor_profile_id = tp.id
        WHERE tp.user_id = ?
          AND tp.is_approved = 1
          AND tp.approval_status = 'approved'
          AND tc.course_id = ?
-         AND (? IS NULL OR tcl.class_id = ?)
          AND (? IS NULL OR tp.subject_id = ?)
        LIMIT 1`,
-      [tutor_id, course_id, class_id, class_id, subject_id, subject_id]
+      [tutor_id, course_id, subject_id, subject_id]
     );
 
     if (tutorEligibility.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'This tutor is not available for your course, class, or subject'
+        message: 'This tutor is not available for your course or subject'
       });
     }
 
@@ -132,19 +116,16 @@ dayBlocks.forEach(block => {
     const [slotBookings] = await connection.query(
   `SELECT 
   sr.subject_id,
-  sr.class_id,
   sr.course_id,
-  c.class_name,
   co.course_name,
   COUNT(*) as booking_count
 FROM session_requests sr
-LEFT JOIN classes c ON sr.class_id = c.id
 LEFT JOIN courses co ON sr.course_id = co.id
 WHERE sr.tutor_id = ?
 AND sr.requested_date = ?
 AND sr.requested_time = ?
 AND sr.status IN ('pending','accepted')
-GROUP BY sr.subject_id, sr.class_id, sr.course_id
+GROUP BY sr.subject_id, sr.course_id
 FOR UPDATE`,
   [tutor_id, requestedDateOnly, requested_time]
 );
@@ -172,21 +153,12 @@ FOR UPDATE`,
     });
   }
 
-  // class check
-  if (slot.class_id !== class_id) {
-    await connection.rollback();
-    return res.status(400).json({
-      success: false,
-       message: `This slot is already booked for ${slot.class_name}`
-    });
-  }
-
   // course check
   if (slot.course_id !== course_id) {
     await connection.rollback();
     return res.status(400).json({
       success: false,
-       message: `This slot is already booked for ${slot.class_name} - ${slot.course_name}`
+       message: `This slot is already booked for ${slot.course_name}`
     });
   }
 
@@ -332,13 +304,13 @@ const acceptRequest = async (req, res, next) => {
 
     const MAX_CAPACITY = 5;
     const [slotBookings] = await connection.query(
-      `SELECT subject_id, COUNT(*) as booking_count
+      `SELECT subject_id, course_id, COUNT(*) as booking_count
        FROM session_requests
        WHERE tutor_id = ?
          AND requested_date = ?
          AND requested_time = ?
          AND status IN ('pending','accepted')
-       GROUP BY subject_id
+       GROUP BY subject_id, course_id
        FOR UPDATE`,
       [sessionRequest.tutor_id, sessionRequest.requested_date, sessionRequest.requested_time]
     );
@@ -350,11 +322,17 @@ const acceptRequest = async (req, res, next) => {
 
     if (slotBookings.length === 1) {
       const slotSubject = slotBookings[0].subject_id;
+      const slotCourse = slotBookings[0].course_id;
       const bookingCount = Number(slotBookings[0].booking_count);
 
       if (slotSubject !== sessionRequest.subject_id) {
         await connection.rollback();
         return res.status(400).json({ success: false, message: 'This slot is reserved for another subject' });
+      }
+
+      if (slotCourse !== sessionRequest.course_id) {
+        await connection.rollback();
+        return res.status(400).json({ success: false, message: 'This slot is reserved for another course' });
       }
 
       if (bookingCount > MAX_CAPACITY) {
