@@ -35,6 +35,31 @@ class Payment {
     return rows[0];
   }
 
+  static async findCompletedByTutorId(tutorId) {
+    const [rows] = await pool.query(
+      `SELECT p.*,
+              s.tutor_id,
+              s.scheduled_date,
+              s.scheduled_time,
+              s.duration_minutes,
+              s.status AS session_status,
+              st.email AS student_email,
+              CONCAT(st.first_name, ' ', st.last_name) AS student_name,
+              st.phone AS student_phone,
+              sub.subject_name
+       FROM payments p
+       JOIN sessions s ON p.session_id = s.id
+       JOIN users st ON p.student_id = st.id
+       LEFT JOIN subjects sub ON s.subject_id = sub.id
+       WHERE s.tutor_id = ?
+         AND p.status = 'completed'
+       ORDER BY p.updated_at DESC, p.created_at DESC`,
+      [tutorId]
+    );
+
+    return rows;
+  }
+
   static async updatePaymentStatus(orderId, paymentData) {
     const {
       razorpay_payment_id,

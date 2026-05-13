@@ -10,6 +10,22 @@ const User = require('../models/User');
 
 const getPaymentMethod = (payload = {}) => payload.payment_method || payload.paymentMethod || null;
 
+const getTutorPayments = async (req, res, next) => {
+  try {
+    const payments = await Payment.findCompletedByTutorId(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        payments,
+        count: payments.length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const createOrder = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
@@ -180,4 +196,4 @@ const verifyPayment = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, verifyPayment };
+module.exports = { createOrder, verifyPayment, getTutorPayments };

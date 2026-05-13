@@ -49,10 +49,11 @@ const getTutorSlots = async (req, res, next) => {
     const { tutorId } = req.params;
 
     const slots = await AvailabilitySlot.findByTutorId(tutorId);
+     const range = await AvailabilitySlot.getRange(tutorId);
 
     res.status(200).json({
       success: true,
-      data: { slots, count: slots.length }
+      data: { slots, count: slots.length, range }
     });
   } catch (error) {
     next(error);
@@ -314,7 +315,7 @@ const getAvailableSlotsByDate = async (req, res, next) => {
     if (!range) {
       return res.status(200).json({
         success: true,
-        data: { date, slots: [] }
+        data: { range,date, slots: [] }
       });
     }
 
