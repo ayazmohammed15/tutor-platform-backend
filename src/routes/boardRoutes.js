@@ -4,9 +4,9 @@ const masterController = require('../controllers/boardController'); // You can r
 
 console.log("✅ Master Data Routes file loaded");
 // 👇 ADD THIS LINE TO DEBUG
-console.log("DEBUG: masterController keys:", Object.keys(masterController));
+// console.log("DEBUG: masterController keys:", Object.keys(masterController));
 
-console.log("✅ Master Data Routes file loaded");
+// console.log("✅ Master Data Routes file loaded");
 
 // 1. Get All Master Data (For initial dropdowns)
 router.get("/courses", masterController.getCourses);      // Merged Boards + Courses

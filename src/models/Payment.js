@@ -60,6 +60,31 @@ class Payment {
     return rows;
   }
 
+  static async findByStudentId(studentId) {
+    const [rows] = await pool.query(
+      `SELECT p.*,
+              s.tutor_id,
+              s.scheduled_date,
+              s.scheduled_time,
+              s.duration_minutes,
+              s.status AS session_status,
+              s.zoom_meeting_link,
+              t.email AS tutor_email,
+              CONCAT(t.first_name, ' ', t.last_name) AS tutor_name,
+              t.phone AS tutor_phone,
+              sub.subject_name
+       FROM payments p
+       JOIN sessions s ON p.session_id = s.id
+       JOIN users t ON s.tutor_id = t.id
+       LEFT JOIN subjects sub ON s.subject_id = sub.id
+       WHERE p.student_id = ?
+       ORDER BY p.updated_at DESC, p.created_at DESC`,
+      [studentId]
+    );
+
+    return rows;
+  }
+
   static async updatePaymentStatus(orderId, paymentData) {
     const {
       razorpay_payment_id,

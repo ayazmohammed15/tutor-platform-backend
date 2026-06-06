@@ -26,6 +26,22 @@ const getTutorPayments = async (req, res, next) => {
   }
 };
 
+const getStudentPayments = async (req, res, next) => {
+  try {
+    const payments = await Payment.findByStudentId(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        payments,
+        count: payments.length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const createOrder = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
@@ -196,4 +212,4 @@ const verifyPayment = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, verifyPayment, getTutorPayments };
+module.exports = { createOrder, verifyPayment, getTutorPayments, getStudentPayments };
