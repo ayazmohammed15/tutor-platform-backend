@@ -4,29 +4,6 @@ const { generateToken } = require('../utils/jwt');
 const emailService = require('../services/emailService');
 const { pool } = require('../config/database');
 
-const GENERAL_COURSE_SLUGS = [
-  "school-tuition",
-  "cbse-school-tuition"
-];
-
-const ENGINEERING_COURSE_SLUGS = [
-  "iit-jee",
-  "neet",
-  "foundation-iit-jee"
-];
-
-const getStudentCategoryFromCourse = (course) => {
-  if (GENERAL_COURSE_SLUGS.includes(course)) {
-    return "general";
-  }
-
-  if (ENGINEERING_COURSE_SLUGS.includes(course)) {
-    return "engineering";
-  }
-
-  return null;
-};
-
 const createStudentAccount = async ({
   email,
   password,
@@ -55,27 +32,22 @@ const createStudentAccount = async ({
   if (existingUser) {
     throw new Error("Email already registered");
   }
-
-  // GENERAL VALIDATION
-  if (student_category === "general") {
-
-    if (!GENERAL_COURSE_SLUGS.includes(course)) {
-      throw new Error("Invalid general tuition course");
-    }
-
-    if (!class_id) {
-      throw new Error("Class is required");
-    }
+  if (!class_id) {
+    throw new Error("Class is required");
   }
+  const [courses] = await pool.query(
+    `
+  SELECT id
+  FROM courses
+  WHERE slug = ?
+  AND is_active = 1
+  `,
+    [course]
+  );
 
-  // ENGINEERING VALIDATION
-  if (student_category === "engineering") {
-
-    if (!ENGINEERING_COURSE_SLUGS.includes(course)) {
-      throw new Error("Invalid engineering course");
-    }
+  if (!courses.length) {
+    throw new Error("Invalid course");
   }
-
   // Create user
   const userId = await User.create({
     email,
@@ -124,8 +96,8 @@ const register = async (req, res) => {
   try {
 
     const result = await createStudentAccount({
-      ...req.body,
-      student_category: req.body.student_category || getStudentCategoryFromCourse(req.body.course)
+      ...req.body
+      
     });
 
     res.status(201).json({
@@ -149,8 +121,7 @@ const registerSchool = async (req, res) => {
   try {
 
     const result = await createStudentAccount({
-      ...req.body,
-      student_category: "general"
+      ...req.body
     });
 
     res.status(201).json({
@@ -174,8 +145,7 @@ const registerEngineering = async (req, res) => {
   try {
 
     const result = await createStudentAccount({
-      ...req.body,
-      student_category: "engineering"
+      ...req.body
     });
 
     res.status(201).json({

@@ -1,12 +1,12 @@
 const crypto = require("crypto");
 const { pool } = require('../config/database');
-const {sendEmail} = require("../services/emailService");
+const { sendEmail } = require("../services/emailService");
 
 const sendTutorInvite = async (req, res) => {
   try {
     const { full_name, email, description } = req.body;
     console.log("Request body:", req.body);
-console.log("Email value:", email);
+    console.log("Email value:", email);
 
 
     // 1️⃣ Check if already user exists
@@ -43,8 +43,8 @@ console.log("Email value:", email);
 
     // 4️⃣ Create Registration Link
     const registrationLink = `${process.env.FRONTEND_URL}/tutor-register?token=${token}`;
-console.log("Email value:", email);
-console.log("Registration Link:", registrationLink);
+    console.log("Email value:", email);
+    console.log("Registration Link:", registrationLink);
     // 5️⃣ Send Email
     sendEmail(
       email,
@@ -122,7 +122,252 @@ const getStudents = async (req, res) => {
   }
 };
 
+const getCourses = async (req, res) => {
+  try {
+
+    const { type } = req.query;
+
+    console.log("REQ QUERY:", req.query);
+    console.log("TYPE:", type);
+
+    let query = `
+      SELECT *
+      FROM courses
+      WHERE is_active = 1
+    `;
+
+    const params = [];
+
+    if (type) {
+      query += ` AND course_type = ?`;
+      params.push(type);
+    }
+
+    query += ` ORDER BY id DESC`;
+
+    const [courses] = await pool.query(query, params);
+
+    res.json(courses);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to fetch courses"
+    });
+  }
+};
+
+const createCourse = async (req, res) => {
+  try {
+
+    const { course_name, course_type } = req.body;
+
+    const slug = course_name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-");
+
+    await pool.query(
+      `
+      INSERT INTO courses
+      (course_name, slug, course_type)
+      VALUES (?, ?, ?)
+      `,
+      [course_name, slug, course_type]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Course created successfully"
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to create course"
+    });
+  }
+};
+
+const updateCourse = async (req, res) => {
+
+  try {
+
+    const { id } = req.params;
+
+    const {
+      course_name,
+      course_type
+
+    } = req.body;
+
+    const slug = course_name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-");
+
+    await pool.query(
+      `
+      UPDATE courses
+      SET course_name=?,
+          slug=?,
+          course_type=?
+      WHERE id=?
+      `,
+      [course_name, slug, course_type, id]
+    );
+
+    res.json({
+      success: true,
+      message: "Course updated successfully"
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to update course"
+    });
+  }
+};
+
+const getSubjects = async (req, res) => {
+  try {
+
+    const [subjects] = await pool.query(`
+      SELECT *
+      FROM subjects
+      WHERE is_active = 1
+      ORDER BY subject_name ASC
+    `);
+
+    res.json(subjects);
+
+  } catch (error) {
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
+
+const createSubject = async (req, res) => {
+  try {
+
+    const { subject_name } = req.body;
+
+    const slug = subject_name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-");
+
+    await pool.query(
+      `
+      INSERT INTO subjects
+      (subject_name, slug)
+      VALUES (?, ?)
+      `,
+      [subject_name, slug]
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
+
+const getCourseSubjects = async (req, res) => {
+
+  try {
+
+    const { courseId } = req.query;
+
+    const [rows] = await pool.query(
+      `
+      SELECT subject_id
+      FROM course_subjects
+      WHERE course_id = ?
+      `,
+      [courseId]
+    );
+
+    res.json(
+      rows.map(row => row.subject_id)
+    );
+
+  } catch (error) {
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
+
+const saveCourseSubjects = async (req, res) => {
+
+  try {
+
+    const {
+      courseId,
+      subjectIds
+    } = req.body;
+
+    await pool.query(
+      `
+      DELETE FROM course_subjects
+      WHERE course_id = ?
+      `,
+      [courseId]
+    );
+
+    for (const subjectId of subjectIds) {
+
+      await pool.query(
+        `
+        INSERT INTO course_subjects
+        (course_id, subject_id)
+        VALUES (?, ?)
+        `,
+        [courseId, subjectId]
+      );
+
+    }
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
+
 module.exports = {
   getStudents,
-  sendTutorInvite
+  sendTutorInvite,
+  getCourses,
+  createCourse,
+  updateCourse,
+  getSubjects,
+  createSubject,
+  getCourseSubjects,
+  saveCourseSubjects
 };

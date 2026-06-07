@@ -21,12 +21,35 @@ exports.getAllSubjects = async (req, res) => {
 ======================== */
 exports.getCourses = async (req, res) => {
   try {
-    const [courses] = await pool.query(
-      `SELECT id, course_name, slug FROM courses WHERE is_active = 1 ORDER BY id ASC`
-    );
+
+    const { type } = req.query;
+
+    let query = `
+      SELECT id, course_name, slug, course_type
+      FROM courses
+      WHERE is_active = 1
+    `;
+
+    const params = [];
+
+    if (type) {
+      query += ` AND course_type = ?`;
+      params.push(type);
+    }
+
+    query += ` ORDER BY id ASC`;
+
+    const [courses] = await pool.query(query, params);
+
     res.json(courses);
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
   }
 };
 

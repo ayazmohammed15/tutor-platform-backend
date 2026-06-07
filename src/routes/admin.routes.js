@@ -39,5 +39,52 @@ router.put(
   authorize("admin"),
   tutorController.rejectTutor
 );
+router.get(
+  "/courses",
+  authenticate,
+  authorize("admin"),
+  adminController.getCourses
+);
 
+router.post(
+  "/courses",
+  authenticate,
+  authorize("admin"),
+  adminController.createCourse
+);
+
+router.put(
+  "/courses/:id",
+  authenticate,
+  authorize("admin"),
+  adminController.updateCourse
+);
+
+router.get(
+  "/subjects",
+  authenticate,
+  authorize("admin"),
+  adminController.getSubjects
+);
+
+router.post(
+  "/subjects",
+  authenticate,
+  authorize("admin"),
+  adminController.createSubject
+);
+
+router.get(
+  "/course-subjects",
+  authenticate,
+  authorize("admin"),
+  adminController.getCourseSubjects
+);
+
+router.post(
+  "/course-subjects",
+  authenticate,
+  authorize("admin"),
+  adminController.saveCourseSubjects
+);
 module.exports = router;
