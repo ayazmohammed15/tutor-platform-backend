@@ -25,7 +25,7 @@ exports.getCourses = async (req, res) => {
     const { type } = req.query;
 
     let query = `
-      SELECT id, course_name, slug, course_type
+      SELECT id, course_name, slug, course_type, is_active
       FROM courses
       WHERE is_active = 1
     `;

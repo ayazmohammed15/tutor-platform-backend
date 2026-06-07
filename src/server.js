@@ -77,9 +77,6 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`\n🚀 Server running on port ${PORT}`);
-      console.log(`📍 Environment: ${config.node_env}`);
-      console.log(`🌐 API Base URL: http://localhost:${PORT}`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/\n`);
     });
   } catch (error) {
     console.error('❌ Server startup error:', error);

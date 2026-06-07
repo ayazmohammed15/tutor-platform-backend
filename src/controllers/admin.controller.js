@@ -295,18 +295,41 @@ const getCourseSubjects = async (req, res) => {
 
     const { courseId } = req.query;
 
+    if (courseId) {
+      const [rows] = await pool.query(
+        `
+        SELECT subject_id
+        FROM course_subjects
+        WHERE course_id = ?
+        `,
+        [courseId]
+      );
+
+      return res.json(
+        rows.map(row => row.subject_id)
+      );
+    }
+
     const [rows] = await pool.query(
       `
-      SELECT subject_id
-      FROM course_subjects
-      WHERE course_id = ?
-      `,
-      [courseId]
+      SELECT
+        cs.course_id,
+        c.course_name,
+        c.slug AS course_slug,
+        c.course_type,
+        cs.subject_id,
+        s.subject_name,
+        s.slug AS subject_slug
+      FROM course_subjects cs
+      JOIN courses c ON c.id = cs.course_id
+      JOIN subjects s ON s.id = cs.subject_id
+      WHERE c.is_active = 1
+        AND s.is_active = 1
+      ORDER BY c.course_name ASC, s.subject_name ASC
+      `
     );
 
-    res.json(
-      rows.map(row => row.subject_id)
-    );
+    res.json(rows);
 
   } catch (error) {
 
@@ -319,6 +342,8 @@ const getCourseSubjects = async (req, res) => {
 
 const saveCourseSubjects = async (req, res) => {
 
+  const connection = await pool.getConnection();
+
   try {
 
     const {
@@ -326,7 +351,26 @@ const saveCourseSubjects = async (req, res) => {
       subjectIds
     } = req.body;
 
-    await pool.query(
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        message: "courseId is required"
+      });
+    }
+
+    if (!Array.isArray(subjectIds)) {
+      return res.status(400).json({
+        success: false,
+        message: "subjectIds must be an array"
+      });
+    }
+
+    const uniqueSubjectIds = [...new Set(subjectIds.map(Number))]
+      .filter(subjectId => Number.isInteger(subjectId) && subjectId > 0);
+
+    await connection.beginTransaction();
+
+    await connection.query(
       `
       DELETE FROM course_subjects
       WHERE course_id = ?
@@ -334,9 +378,9 @@ const saveCourseSubjects = async (req, res) => {
       [courseId]
     );
 
-    for (const subjectId of subjectIds) {
+    for (const subjectId of uniqueSubjectIds) {
 
-      await pool.query(
+      await connection.query(
         `
         INSERT INTO course_subjects
         (course_id, subject_id)
@@ -347,15 +391,25 @@ const saveCourseSubjects = async (req, res) => {
 
     }
 
+    await connection.commit();
+
     res.json({
-      success: true
+      success: true,
+      courseId: Number(courseId),
+      subjectIds: uniqueSubjectIds
     });
 
   } catch (error) {
 
+    await connection.rollback();
+
     res.status(500).json({
       message: error.message
     });
+
+  } finally {
+
+    connection.release();
 
   }
 };
