@@ -33,22 +33,28 @@ const createSessionRequest = async (req, res, next) => {
     const course_id = student.course_id ? parseInt(student.course_id, 10) : null;
     const class_id = student.class_id ? parseInt(student.class_id, 10) : null;
 
-    if (!course_id) {
-      return res.status(400).json({ success: false, message: 'Student course is not configured' });
-    }
-
-    const [tutorEligibility] = await connection.query(
-      `SELECT tp.id
+    // Build tutor eligibility query dynamically to allow students without a configured course
+    let eligibilitySql = `SELECT tp.id
        FROM tutor_profiles tp
        JOIN tutor_courses tc ON tc.tutor_profile_id = tp.id
        WHERE tp.user_id = ?
          AND tp.is_approved = 1
-         AND tp.approval_status = 'approved'
-         AND tc.course_id = ?
-         AND (? IS NULL OR tp.subject_id = ?)
-       LIMIT 1`,
-      [tutor_id, course_id, subject_id, subject_id]
-    );
+         AND tp.approval_status = 'approved'`;
+    const eligibilityParams = [tutor_id];
+
+    if (course_id !== null) {
+      eligibilitySql += ` AND tc.course_id = ?`;
+      eligibilityParams.push(course_id);
+    }
+
+    if (subject_id !== null) {
+      eligibilitySql += ` AND tp.subject_id = ?`;
+      eligibilityParams.push(subject_id);
+    }
+
+    eligibilitySql += ` LIMIT 1`;
+
+    const [tutorEligibility] = await connection.query(eligibilitySql, eligibilityParams);
 
     if (tutorEligibility.length === 0) {
       return res.status(400).json({
@@ -130,47 +136,66 @@ FOR UPDATE`,
   [tutor_id, requestedDateOnly, requested_time]
 );
 
-    if (slotBookings.length > 0) {
-  if (slotBookings.length > 1) {
+      if (slotBookings.length > 0) {
+        if (slotBookings.length > 1) {
     await connection.rollback();
     return res.status(400).json({
       success: false,
       message: 'This slot has conflicting bookings. Please choose another slot'
     });
   }
+        const slot = slotBookings[0]; // ✅ IMPORTANT
 
-  const slot = slotBookings[0]; // ✅ IMPORTANT
+        const slotSubject = slot.subject_id;
+        const bookingCount = Number(slot.booking_count);
 
-  const slotSubject = slot.subject_id;
-  const bookingCount = Number(slot.booking_count);
+        // subject check: if the incoming subject is null, only allow if slot also has null
+        if (subject_id === null) {
+          if (slotSubject !== null) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'This slot is already reserved for another subject'
+            });
+          }
+        } else {
+          if (slotSubject !== subject_id) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'This slot is already reserved for another subject'
+            });
+          }
+        }
 
-  // subject check
-  if (slotSubject !== subject_id) {
-    await connection.rollback();
-    return res.status(400).json({
-      success: false,
-      message: 'This slot is already reserved for another subject'
-    });
-  }
+        // course check: if student has no course, only allow if slot's course is also null
+        if (course_id === null) {
+          if (slot.course_id !== null) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `This slot is already booked for ${slot.course_name}`
+            });
+          }
+        } else {
+          if (slot.course_id !== course_id) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+               message: `This slot is already booked for ${slot.course_name}`
+            });
+          }
+        }
 
-  // course check
-  if (slot.course_id !== course_id) {
-    await connection.rollback();
-    return res.status(400).json({
-      success: false,
-       message: `This slot is already booked for ${slot.course_name}`
-    });
-  }
-
-  // capacity check
-  if (bookingCount >= MAX_CAPACITY) {
-    await connection.rollback();
-    return res.status(400).json({
-      success: false,
-      message: 'This slot is already full'
-    });
-  }
-}
+        // capacity check
+        if (bookingCount >= MAX_CAPACITY) {
+          await connection.rollback();
+          return res.status(400).json({
+            success: false,
+            message: 'This slot is already full'
+          });
+        }
+      }
 
     const [duplicate] = await connection.query(
       `SELECT id 
@@ -325,14 +350,30 @@ const acceptRequest = async (req, res, next) => {
       const slotCourse = slotBookings[0].course_id;
       const bookingCount = Number(slotBookings[0].booking_count);
 
-      if (slotSubject !== sessionRequest.subject_id) {
-        await connection.rollback();
-        return res.status(400).json({ success: false, message: 'This slot is reserved for another subject' });
+      // subject check: sessionRequest.subject_id may be null
+      if (sessionRequest.subject_id === null) {
+        if (slotSubject !== null) {
+          await connection.rollback();
+          return res.status(400).json({ success: false, message: 'This slot is reserved for another subject' });
+        }
+      } else {
+        if (slotSubject !== sessionRequest.subject_id) {
+          await connection.rollback();
+          return res.status(400).json({ success: false, message: 'This slot is reserved for another subject' });
+        }
       }
 
-      if (slotCourse !== sessionRequest.course_id) {
-        await connection.rollback();
-        return res.status(400).json({ success: false, message: 'This slot is reserved for another course' });
+      // course check: sessionRequest.course_id may be null
+      if (sessionRequest.course_id === null) {
+        if (slotCourse !== null) {
+          await connection.rollback();
+          return res.status(400).json({ success: false, message: 'This slot is reserved for another course' });
+        }
+      } else {
+        if (slotCourse !== sessionRequest.course_id) {
+          await connection.rollback();
+          return res.status(400).json({ success: false, message: 'This slot is reserved for another course' });
+        }
       }
 
       if (bookingCount > MAX_CAPACITY) {

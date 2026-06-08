@@ -5,85 +5,51 @@ const emailService = require('../services/emailService');
 const { pool } = require('../config/database');
 
 const createStudentAccount = async ({
-  email,
-  password,
   first_name,
   last_name,
-  phone,
-  course,
-  class_id,
-  subjects,
-  student_category
+  email,
+  password
 }) => {
 
-  // Basic validation
-  if (!email || !password) {
-    throw new Error("Email and password are required");
+  if (!first_name || !last_name || !email || !password) {
+    throw new Error("First name, last name, email and password are required");
   }
 
-  // Subject validation
-  if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
-    throw new Error("Please select at least one subject");
-  }
-
-  // Existing email validation
   const existingUser = await User.findByEmail(email);
 
   if (existingUser) {
     throw new Error("Email already registered");
   }
-  if (!class_id) {
-    throw new Error("Class is required");
-  }
-  const [courses] = await pool.query(
-    `
-  SELECT id
-  FROM courses
-  WHERE slug = ?
-  AND is_active = 1
-  `,
-    [course]
-  );
 
-  if (!courses.length) {
-    throw new Error("Invalid course");
-  }
-  // Create user
   const userId = await User.create({
-    email,
-    password,
     first_name,
     last_name,
-    phone,
-    role: "student",
-    course,
-    class_id,
-    student_category
+    email,
+    password,
+    role: "student"
   });
 
-  // Insert subjects
-  const subjectValues = subjects.map(subjectId => [
-    userId,
-    subjectId
-  ]);
-
   await pool.query(
-    `INSERT INTO student_subjects (student_id, subject_id) VALUES ?`,
-    [subjectValues]
+    `
+    INSERT INTO student_profiles
+    (
+      user_id,
+      profile_completed
+    )
+    VALUES (?, false)
+    `,
+    [userId]
   );
 
-  // Get created user
   const user = await User.findById(userId);
 
-  // Generate token
+  emailService.sendWelcomeEmail(user)
+    .catch(err => console.error(err));
+
   const token = generateToken({
     userId: user.id,
     role: user.role
   });
-
-  // Welcome email
-  emailService.sendWelcomeEmail(user)
-    .catch(err => console.error(err));
 
   return {
     user,
@@ -116,53 +82,7 @@ const register = async (req, res) => {
   }
 };
 
-const registerSchool = async (req, res) => {
 
-  try {
-
-    const result = await createStudentAccount({
-      ...req.body
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "School registration successful",
-      data: result
-    });
-
-  } catch (error) {
-
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
-
-  }
-};
-
-const registerEngineering = async (req, res) => {
-
-  try {
-
-    const result = await createStudentAccount({
-      ...req.body
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Engineering registration successful",
-      data: result
-    });
-
-  } catch (error) {
-
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
-
-  }
-};
 
 const login = async (req, res, next) => {
   try {
@@ -452,8 +372,6 @@ const completeRegistration = async (req, res) => {
 
 module.exports = {
   register,
-  registerSchool,
-  registerEngineering,
   login,
   getProfile,
   updateProfile,

@@ -4,48 +4,35 @@ const bcrypt = require('bcryptjs');
 class User {
 
   static async create(userData) {
+
     const {
-      email,
-      password,
       first_name,
       last_name,
-      phone,
-      role,
-      course, // This comes in as the slug (e.g., 'iit-jee')
-      class_id,
-      student_category
+      email,
+      password,
+      role
     } = userData;
 
-    // 1. Find the real numeric ID for the course slug
-    let realCourseId = null;
-    if (course) {
-      const [courseRows] = await pool.query(
-        `SELECT id FROM courses WHERE slug = ?`,
-        [course]
-      );
-      if (courseRows.length > 0) {
-        realCourseId = courseRows[0].id;
-      }
-    }
-
-    // 2. Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3. Insert into the users table using the real numeric ID
     const [result] = await pool.query(
-      `INSERT INTO users 
-      (first_name, last_name, email, password, phone, role, course_id, class_id, student_category) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `
+      INSERT INTO users
+      (
+        first_name,
+        last_name,
+        email,
+        password,
+        role
+      )
+      VALUES (?, ?, ?, ?, ?)
+      `,
       [
         first_name,
         last_name,
         email,
         hashedPassword,
-        phone,
-        role,
-        realCourseId || null, // Use the fetched integer ID here
-        class_id || null,
-        student_category || null
+        role
       ]
     );
 
@@ -61,30 +48,27 @@ class User {
   }
 
   static async findById(id) {
-  const [rows] = await pool.query(
-    `
-    SELECT 
-      u.id,
-      u.first_name,
-      u.last_name,
-      u.email,
-      u.phone,
-      u.role,
-      u.course_id,
-      u.class_id,
-      u.student_category,
-      GROUP_CONCAT(ss.subject_id) AS subjects
-    FROM users u
-    LEFT JOIN student_subjects ss 
-      ON ss.student_id = u.id
-    WHERE u.id = ?
-    GROUP BY u.id
-    `,
-    [id]
-  );
+    const [rows] = await pool.query(
+      `
+      SELECT
+        id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        role,
+        is_verified,
+        is_active,
+        created_at,
+        updated_at
+      FROM users
+      WHERE id = ?
+      `,
+      [id]
+    );
 
-  return rows[0];
-}
+    return rows[0];
+  }
 
   static async update(id, updates) {
     const fields = [];

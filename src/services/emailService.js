@@ -30,13 +30,13 @@ const sendEmail = async (to, subject, html) => {
 };
 
 const sendWelcomeEmail = async (user) => {
-  const subject = 'Welcome to Tutofly!';
+  const subject = 'Welcome to ScienceEdu!';
   const html = `
     <h2>Welcome ${user.first_name}! 👋</h2>
     <p>Thank you for registering on our platform.</p>
     <p>Your student account is now active. You can start browsing subjects, viewing tutor profiles, and booking your first session right away!</p>
     <br/>
-    <p>Best regards,<br>The Tutofly Team</p>
+    <p>Best regards,<br>The ScienceEdu Team</p>
   `;
   console.log("Sending welcome email to:", user.email);
 
