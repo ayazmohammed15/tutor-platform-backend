@@ -274,47 +274,21 @@ const rejectTutor = async (req, res, next) => {
 
 const searchTutors = async (req, res, next) => {
   try {
+    const { course_id, class_id, subject_id, search, qualification, min_experience } = req.query;
 
-    const { course_id, class_id, subject_id, course_ids, class_ids, subject_ids } = req.query;
-
-    const student = await User.findById(req.user.id);
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found"
-      });
-    }
-
-    // Parse incoming query params: allow comma-separated lists or single values
     const parseList = (val) => {
       if (!val) return [];
-      if (Array.isArray(val)) return val.map(v => Number(v));
+      if (Array.isArray(val)) return val.map(v => Number(v)).filter(Boolean);
       return String(val).split(',').map(v => Number(v)).filter(Boolean);
     };
 
-    // Priority: explicit query params (course_ids / class_ids / subject_ids or single ones),
-    // fallback to student's course/class/subjects when not provided.
-    const parsedCourseIds = parseList(course_ids || course_id);
-    const parsedClassIds = parseList(class_ids || class_id);
-
-    let parsedSubjectIds = parseList(subject_ids || subject_id);
-    if (parsedSubjectIds.length === 0) {
-      // fetch student subjects
-      const [subjects] = await pool.query(
-        `SELECT subject_id FROM student_subjects WHERE student_id = ?`,
-        [req.user.id]
-      );
-      parsedSubjectIds = subjects.map(s => s.subject_id);
-    }
-
-    // If no explicit course/class filters provided, fall back to student's values
-    if (parsedCourseIds.length === 0 && student.course_id) parsedCourseIds.push(student.course_id);
-    if (parsedClassIds.length === 0 && student.class_id) parsedClassIds.push(student.class_id);
-
     const tutors = await TutorProfile.searchTutors({
-      course_ids: parsedCourseIds,
-      class_ids: parsedClassIds,
-      subject_ids: parsedSubjectIds
+      course_ids: parseList(course_id),
+      class_ids: parseList(class_id),
+      subject_ids: parseList(subject_id),
+      search: search?.trim() || null,
+      qualification: qualification?.trim() || null,
+      min_experience: min_experience ? Number(min_experience) : null,
     });
 
     res.status(200).json({
