@@ -9,6 +9,7 @@ class User {
       first_name,
       last_name,
       email,
+      phone,
       password,
       role
     } = userData;
@@ -22,15 +23,17 @@ class User {
         first_name,
         last_name,
         email,
+        phone,
         password,
         role
       )
-      VALUES (?, ?, ?, ?, ?)
+      VALUES (?, ?,?, ?, ?, ?)
       `,
       [
         first_name,
         last_name,
         email,
+        phone,
         hashedPassword,
         role
       ]
@@ -50,26 +53,30 @@ class User {
   static async findById(id) {
     const [rows] = await pool.query(
       `
-      SELECT
-        id,
-        first_name,
-        last_name,
-        email,
-        phone,
-        role,
-        is_verified,
-        is_active,
-        created_at,
-        updated_at
-      FROM users
-      WHERE id = ?
-      `,
+    SELECT
+      u.id,
+      u.first_name,
+      u.last_name,
+      u.email,
+      u.phone,
+      u.role,
+      u.is_verified,
+      u.is_active,
+      u.created_at,
+      u.updated_at,
+      sp.course_id,
+      sp.class_id,
+      sp.student_category
+    FROM users u
+    LEFT JOIN student_profiles sp
+      ON u.id = sp.user_id
+    WHERE u.id = ?
+    `,
       [id]
     );
 
     return rows[0];
   }
-
   static async update(id, updates) {
     const fields = [];
     const values = [];

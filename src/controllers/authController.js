@@ -8,11 +8,16 @@ const createStudentAccount = async ({
   first_name,
   last_name,
   email,
+  phone,
   password
 }) => {
 
-  if (!first_name || !last_name || !email || !password) {
-    throw new Error("First name, last name, email and password are required");
+  if (!first_name || !last_name || !email || !phone || !password) {
+    throw new Error("First name, last name, email, phone and password are required");
+  }
+
+  if (!/^[0-9]{10}$/.test(phone)) {
+    throw new Error("Please enter a valid 10 digit mobile number");
   }
 
   const existingUser = await User.findByEmail(email);
@@ -25,6 +30,7 @@ const createStudentAccount = async ({
     first_name,
     last_name,
     email,
+    phone,
     password,
     role: "student"
   });
@@ -63,7 +69,7 @@ const register = async (req, res) => {
 
     const result = await createStudentAccount({
       ...req.body
-      
+
     });
 
     res.status(201).json({
@@ -155,6 +161,7 @@ const login = async (req, res, next) => {
         user: {
           id: user.id,
           email: user.email,
+          phone: user.phone,
           first_name: user.first_name,
           last_name: user.last_name,
           role: user.role,
@@ -244,21 +251,28 @@ const getProfile = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { first_name, last_name, phone } = req.body;
+    const { first_name, last_name, phone, course_id, class_id } = req.body;
+
     const updates = {};
 
     if (first_name) updates.first_name = first_name;
     if (last_name) updates.last_name = last_name;
     if (phone) updates.phone = phone;
 
-    const updated = await User.update(req.user.id, updates);
-
-    if (!updated) {
-      return res.status(400).json({
-        success: false,
-        message: 'No changes made'
-      });
+    if (Object.keys(updates).length > 0) {
+      await User.update(req.user.id, updates);
     }
+
+    await pool.query(
+      `
+  UPDATE student_profiles
+  SET
+    course_id = ?,
+    class_id = ?
+  WHERE user_id = ?
+  `,
+      [course_id || null, class_id || null, req.user.id]
+    );
 
     const user = await User.findById(req.user.id);
 
