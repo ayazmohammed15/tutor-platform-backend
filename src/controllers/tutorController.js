@@ -85,7 +85,23 @@ const updateProfile = async (req, res, next) => {
     if (hourly_rate !== undefined) updates.hourly_rate = hourly_rate;
 
     // UPDATED: Added new fields to the update object
-    if (subject_id !== undefined) updates.subject_id = subject_id;
+    if (subject_id !== undefined) {
+      const [subjects] = await pool.query(
+        `SELECT id
+     FROM subjects
+     WHERE id = ? AND is_active = 1`,
+        [subject_id]
+      );
+
+      if (subjects.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid subject selected'
+        });
+      }
+
+      updates.subject_id = subject_id;
+    }
     if (demo_link !== undefined) updates.demo_link = demo_link;
     if (teaching_mode !== undefined) updates.teaching_mode = teaching_mode;
 
