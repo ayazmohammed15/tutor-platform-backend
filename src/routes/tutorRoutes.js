@@ -10,6 +10,7 @@ router.get('/profile/me', authenticate, authorize('tutor'), tutorController.getM
 router.get('/google-status', authenticate, authorize('tutor'), tutorController.getGoogleConnectionStatus);
 router.put('/profile', authenticate, authorize('tutor'), tutorProfileValidator, validate, tutorController.updateProfile);
 
+router.get('/public', tutorController.getPublicTutors);
 router.get('/status/:status', authenticate, authorize('admin'), tutorController.getTutorsByStatus);
 router.put('/:tutorId/approve', authenticate, authorize('admin'), tutorController.approveTutor);
 router.put('/:tutorId/reject', authenticate, authorize('admin'), tutorController.rejectTutor);

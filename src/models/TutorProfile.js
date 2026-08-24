@@ -362,6 +362,92 @@ ORDER BY tp.experience_years DESC
     const [rows] = await pool.query(query, values);
     return rows;
   }
+
+  static async getPublicTutors(filters = {}) {
+    const limit = Number(filters.limit) > 0 ? Math.min(Number(filters.limit), 50) : 6;
+    const subjectId = Number(filters.subject_id) || null;
+    const classId = Number(filters.class_id) || null;
+    const search = filters.search?.trim() || null;
+
+    const conditions = [
+      `tp.is_approved = 1`,
+      `tp.approval_status = 'approved'`,
+      `u.role = 'tutor'`,
+      `u.is_active = 1`
+    ];
+    const values = [];
+
+    if (subjectId) {
+      conditions.push(`tp.subject_id = ?`);
+      values.push(subjectId);
+    }
+
+    if (classId) {
+      conditions.push(
+        `EXISTS (
+          SELECT 1
+          FROM tutor_classes tc_filter
+          WHERE tc_filter.tutor_profile_id = tp.id
+          AND tc_filter.class_id = ?
+        )`
+      );
+      values.push(classId);
+    }
+
+    if (search) {
+      const like = `%${search}%`;
+      conditions.push(
+        `(u.first_name LIKE ? OR u.last_name LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR s.subject_name LIKE ?)`
+      );
+      values.push(like, like, like, like);
+    }
+
+    values.push(limit);
+
+    const query = `
+      SELECT
+        tp.id AS tutor_profile_id,
+        tp.user_id,
+        u.first_name,
+        u.last_name,
+        CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+        tp.bio,
+        tp.education,
+        tp.experience_years,
+        tp.hourly_rate,
+        tp.profile_image,
+        tp.teaching_mode,
+        tp.demo_link,
+        s.id AS subject_id,
+        s.subject_name,
+        GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_order SEPARATOR ', ') AS classes
+      FROM tutor_profiles tp
+      JOIN users u ON u.id = tp.user_id
+      LEFT JOIN subjects s ON s.id = tp.subject_id
+      LEFT JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
+      LEFT JOIN classes c ON c.id = tc.class_id
+      WHERE ${conditions.join('\n        AND ')}
+      GROUP BY
+        tp.id,
+        tp.user_id,
+        u.first_name,
+        u.last_name,
+        tp.bio,
+        tp.education,
+        tp.experience_years,
+        tp.hourly_rate,
+        tp.profile_image,
+        tp.teaching_mode,
+        tp.demo_link,
+        s.id,
+        s.subject_name
+      ORDER BY tp.created_at DESC
+      LIMIT ?
+    `;
+
+    const [rows] = await pool.query(query, values);
+    return rows;
+  }
 }
 
 module.exports = TutorProfile;

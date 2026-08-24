@@ -44,6 +44,27 @@ const createProfile = async (req, res, next) => {
   }
 };
 
+const getPublicTutors = async (req, res, next) => {
+  try {
+    const tutors = await TutorProfile.getPublicTutors({
+      limit: req.query.limit,
+      search: req.query.search,
+      subject_id: req.query.subject_id,
+      class_id: req.query.class_id
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        tutors,
+        count: tutors.length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getMyProfile = async (req, res, next) => {
   try {
     const profile = await TutorProfile.findByUserId(req.user.id);
@@ -373,6 +394,7 @@ const getGoogleConnectionStatus = async (req, res, next) => {
 
 module.exports = {
   createProfile,
+  getPublicTutors,
   getMyProfile,
   updateProfile,
   getTutorsByStatus,
