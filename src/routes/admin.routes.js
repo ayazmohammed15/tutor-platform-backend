@@ -87,4 +87,19 @@ router.post(
   authorize("admin"),
   adminController.saveCourseSubjects
 );
+
+router.get(
+  "/bookings",
+  authenticate,
+  authorize("admin"),
+  adminController.getAdminBookings
+);
+
+router.get(
+  "/payments",
+  authenticate,
+  authorize("admin"),
+  adminController.getAdminPayments
+);
+
 module.exports = router;

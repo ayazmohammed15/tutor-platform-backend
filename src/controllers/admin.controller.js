@@ -414,6 +414,104 @@ const saveCourseSubjects = async (req, res) => {
   }
 };
 
+const getAdminBookings = async (req, res) => {
+  try {
+    const [bookings] = await pool.query(`
+      SELECT 
+        s.id,
+        s.session_request_id,
+        s.student_id,
+        s.tutor_id,
+        s.subject_id,
+        s.scheduled_date,
+        s.scheduled_time,
+        s.duration_minutes,
+        s.status,
+        s.notes,
+        s.created_at,
+        s.updated_at,
+        st.first_name AS student_first_name,
+        st.last_name AS student_last_name,
+        st.email AS student_email,
+        st.phone AS student_phone,
+        t.first_name AS tutor_first_name,
+        t.last_name AS tutor_last_name,
+        t.email AS tutor_email,
+        t.phone AS tutor_phone,
+        sub.subject_name
+      FROM sessions s
+      JOIN users st ON s.student_id = st.id
+      JOIN users t ON s.tutor_id = t.id
+      LEFT JOIN subjects sub ON s.subject_id = sub.id
+      ORDER BY s.scheduled_date DESC, s.scheduled_time DESC
+    `);
+
+    res.json({
+      success: true,
+      count: bookings.length,
+      bookings
+    });
+  } catch (error) {
+    console.error('Error fetching admin bookings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch bookings'
+    });
+  }
+};
+
+const getAdminPayments = async (req, res) => {
+  try {
+    const [payments] = await pool.query(`
+      SELECT 
+        p.id,
+        p.session_id,
+        p.student_id,
+        p.amount,
+        p.currency,
+        p.status,
+        p.razorpay_order_id,
+        p.razorpay_payment_id,
+        p.razorpay_signature,
+        p.payment_method,
+        p.created_at,
+        p.updated_at,
+        s.tutor_id,
+        s.scheduled_date,
+        s.scheduled_time,
+        s.duration_minutes,
+        s.status AS session_status,
+        st.first_name AS student_first_name,
+        st.last_name AS student_last_name,
+        st.email AS student_email,
+        st.phone AS student_phone,
+        t.first_name AS tutor_first_name,
+        t.last_name AS tutor_last_name,
+        t.email AS tutor_email,
+        t.phone AS tutor_phone,
+        sub.subject_name
+      FROM payments p
+      JOIN sessions s ON p.session_id = s.id
+      JOIN users st ON p.student_id = st.id
+      JOIN users t ON s.tutor_id = t.id
+      LEFT JOIN subjects sub ON s.subject_id = sub.id
+      ORDER BY p.updated_at DESC, p.created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      count: payments.length,
+      payments
+    });
+  } catch (error) {
+    console.error('Error fetching admin payments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch payments'
+    });
+  }
+};
+
 module.exports = {
   getStudents,
   sendTutorInvite,
@@ -423,5 +521,7 @@ module.exports = {
   getSubjects,
   createSubject,
   getCourseSubjects,
-  saveCourseSubjects
+  saveCourseSubjects,
+  getAdminBookings,
+  getAdminPayments
 };
