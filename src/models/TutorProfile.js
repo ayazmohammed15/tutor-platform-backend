@@ -420,12 +420,15 @@ ORDER BY tp.experience_years DESC
         tp.demo_link,
         s.id AS subject_id,
         s.subject_name,
-        GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_order SEPARATOR ', ') AS classes
+        GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_order SEPARATOR ', ') AS classes,
+        GROUP_CONCAT(DISTINCT co.course_name ORDER BY co.id SEPARATOR ', ') AS exam_focus
       FROM tutor_profiles tp
       JOIN users u ON u.id = tp.user_id
       LEFT JOIN subjects s ON s.id = tp.subject_id
       LEFT JOIN tutor_classes tc ON tc.tutor_profile_id = tp.id
       LEFT JOIN classes c ON c.id = tc.class_id
+      LEFT JOIN tutor_courses tco ON tco.tutor_profile_id = tp.id
+LEFT JOIN courses co ON co.id = tco.course_id
       WHERE ${conditions.join('\n        AND ')}
       GROUP BY
         tp.id,
